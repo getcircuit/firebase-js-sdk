@@ -1,17 +1,20 @@
 /**
- * Compares the JavaScript bundles of a local main build of @firebase/firestore with
- * the published package.
+ * Compares a local build of @firebase/firestore with the published package: the
+ * JavaScript bundles of the main build and the rolled-up type files.
  *
  * Usage: node compare-build.mjs <published dist> <built dist> (--expect-identical | --write <dir>)
  *
  * The main build (rollup.config.js) writes every bundle except lite/ and
- * intermediate/lite/, which come from rollup.config.lite.js. Shared chunks are
+ * intermediate/lite/, which come from rollup.config.lite.js. The type files are the
+ * dist/*.d.ts and dist/lite/*.d.ts that the package's api-report scripts write;
+ * consumers read those, not the per-module declarations under dist/firestore/.
+ * Shared chunks are
  * named after a hash of their contents (common-456515ba.esm.js), and the files
  * that import them name them too, so the comparison first maps each built chunk
  * name to the published one by matching the imports of files with the same name.
  *
- * --expect-identical exits with status 1 unless every bundle matches byte for byte.
- * --write writes each changed bundle, under its published name, into <dir>.
+ * --expect-identical exits with status 1 unless every file matches byte for byte.
+ * --write writes each changed file, under its published name, into <dir>.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,11 +35,12 @@ function walk(dir) {
 
 const isMainBundle = f =>
   /\.(m?js)$/.test(f) && !f.startsWith('lite/') && !f.startsWith('intermediate/lite/');
+const isTypeRollup = f => /^(lite\/)?[^/]+\.d\.ts$/.test(f);
 const chunkName = /common-([0-9a-f]{8})\./;
 const chunkHashes = text => [...text.matchAll(/common-([0-9a-f]{8})\./g)].map(m => m[1]);
 const read = f => fs.readFileSync(f, 'utf8');
 
-const files = walk(published).filter(isMainBundle);
+const files = walk(published).filter(f => isMainBundle(f) || isTypeRollup(f));
 
 // Built chunk hash -> published chunk hash, paired through the files that import them.
 const hashes = new Map();
@@ -89,7 +93,7 @@ for (const f of files) {
   }
 }
 
-console.log(`${files.length} bundles compared, ${changed} changed`);
+console.log(`${files.length} files compared, ${changed} changed`);
 if (problems > 0 || (mode === '--expect-identical' && changed > 0)) {
   process.exit(1);
 }

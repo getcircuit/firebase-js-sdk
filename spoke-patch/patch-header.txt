@@ -1,13 +1,6 @@
 # Makes @firebase/firestore {{FIRESTORE_VERSION}} (firebase {{FIREBASE_VERSION}}) do work per server update in
 # proportion to what changed, not to everything the client holds live.
 #
-# Source: tag spoke-firestore-{{FIRESTORE_VERSION}} (branch spoke) of
-# github.com/getcircuit/firebase-js-sdk, our changes on top of tag firebase@{{FIREBASE_VERSION}}.
-# spoke-patch/build-patch.sh there generates this file: it builds the release tag,
-# checks that the build is byte-identical to the published package, builds our
-# changes and diffs the two. Do not edit the diff below by hand; change the branch
-# and regenerate it.
-#
 # Why: on every server update (remote event), local write, ack or bundle load, the
 # client revisits every listener's view and some per-listener state. A page holding
 # ~370 listeners and ~24,000 documents and receiving ~15 updates per second spent
@@ -66,8 +59,13 @@
 #    spelled differently is never skipped and marks the limbo documents for a full
 #    check.
 #
-# Behavior: every change returns the same results, emits the same limbo changes in
-# the same order and throws the same errors as upstream. Checked on the branch:
+# 7. doc(collectionReference, path) types (firebase/firebase-js-sdk#7826)
+#    The overload accepted `path?: string`, so doc(reference, undefined) compiled
+#    and then threw at runtime. It is now doc(reference) for a generated ID and
+#    doc(reference, path: string, ...pathSegments). Only the type rollups change.
+#
+# Behavior: changes 1-6 return the same results, emit the same limbo changes in
+# the same order and throw the same errors as upstream. Checked on the branch:
 # - Firestore's unit and spec suites, in memory and with mock IndexedDB
 #   persistence including multi-tab specs, give the same results as the release
 #   tag: any test that fails also fails there.
@@ -75,6 +73,8 @@
 #   the {{FIREBASE_VERSION}} View (2,800 randomized runs, including sibling, nested and parent
 #   paths, collection-group queries and value-equal numeric ids), and
 #   view_review_cases.test.ts adds nine deterministic cases from code review.
+# - test/unit/api/doc_overloads.test.ts fails to compile against the upstream
+#   doc() overloads (change 7).
 # - view_limbo_fuzz.test.ts compares the limbo documents with a full recompute
 #   after every call; key_in_filter_fuzz.test.ts compares the key filters with a
 #   plain isEqual scan, thrown errors included (400 seeds).
@@ -90,8 +90,9 @@
 #   31-42 ms, long-task share 12-13% -> 2.5-10%. First publish (~40 s) is unchanged.
 #
 # Files: the main build's bundles that change (the common-* chunks, index.rn.js,
-# whose local names shift, and intermediate/). The lite/ bundles are not rebuilt
-# and stay as published.
+# whose local names shift, and intermediate/), and the type rollups that change
+# (dist/*.d.ts, dist/lite/*.d.ts). The lite/ bundles are not rebuilt and stay as
+# published, and neither are the per-module declarations under dist/firestore/.
 #
 # Upgrading @firebase/firestore: this patch applies to {{FIRESTORE_VERSION}} only. Merge the new
 # firebase@ tag into the spoke branch, run the tests above and regenerate this file
