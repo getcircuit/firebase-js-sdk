@@ -48,6 +48,7 @@ Upstream `main` is ahead of any release, so `spoke` only ever takes in release t
 - `packages/firestore/rollup.shared.js` can load and save terser's name cache (`NC_IN`, `NC_OUT`). With both unset it builds exactly what upstream builds.
 - `spoke-patch/build-patch.sh` builds the Yarn patch, and `compare-build.mjs` compares a build with the published package.
 - `spoke-patch/upstream-view.sh` writes `upstream_view.ts` from a release tag, or checks it with `--check`.
+- `.github/workflows/spoke.yml` checks every pull request into `spoke` and every push to it, and uploads the built patch.
 - `spoke-patch/upstream/` tracks where each change stands upstream, with ready-to-paste issue drafts in `upstream/issues/`.
 
 ## Run the tests
@@ -83,13 +84,30 @@ A package version takes one Yarn patch, so every change to Firestore belongs on 
 
 The `doc()` type fix (change 7) came from such a patch, written for 4.5.0.
 
+## Ship a change
+
+```mermaid
+flowchart LR
+  A["branch from spoke<br/>one commit per change"] --> B["PR into spoke<br/>CI: types, tests, patch build"]
+  B -->|"Rebase and merge"| C["push to spoke<br/>CI builds the patch artifact"]
+  C --> D["consumer PR<br/>links the fork PR and the run"]
+```
+
+1. Cut a branch from `spoke` and make the change: one commit per change, each with its test, its `Spoke patch (...)` markers, and updates to `patch-header.txt` and `upstream/`.
+2. Open a pull request into `spoke` in this fork. `.github/workflows/spoke.yml` type-checks, runs the unit and spec tests in memory and with persistence, and builds the patch (uploaded as the `firestore-patch` artifact). It must pass before merging.
+3. Merge with "Rebase and merge", so `spoke` stays one commit per change. The push to `spoke` runs the workflow again and builds the patch from the `spoke` commit.
+4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact, or with a local `build-patch.sh` build of the same commit, which gives the same file. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit.
+5. Once that pull request merges, tag the commit as in step 6 below.
+
+Upgrades follow the same path: the merge of the new release tag goes into `spoke` through a pull request too.
+
 ## Move to a new SDK release
 
 1. Fetch upstream tags: `git fetch https://github.com/firebase/firebase-js-sdk.git 'refs/tags/firebase@*:refs/tags/firebase@*'`.
-2. On `spoke`, merge the new release tag: `git merge firebase@<new>`. Resolve conflicts in the merge commit, and drop any change upstream now ships, with a revert or in the merge itself.
+2. On a branch cut from `spoke`, merge the new release tag (`git merge firebase@<new>`) and open a pull request into `spoke`. Resolve conflicts in the merge commit, and drop any change upstream now ships, with a revert or in the merge itself.
 3. Regenerate the upstream copy with `spoke-patch/upstream-view.sh firebase@<new>` and commit it, so the comparison tests run against the new release.
 4. Run the tests above, and update `patch-header.txt` if a change or its evidence changed.
 5. Build the patch with the new tag, passing the consumer's existing patches for the new version if it has any, and replace it in the consuming repository.
-6. Tag the commit you built from, `spoke-firestore-<new firestore version>`, and push `spoke` and the tag.
+6. Once the consuming pull request merges, tag the commit its patch was built from, `spoke-firestore-<new firestore version>`, and push the tag.
 
 To propose a change upstream, cut a branch from the release tag and cherry-pick or rewrite that change on it.

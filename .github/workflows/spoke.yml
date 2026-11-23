@@ -1,0 +1,78 @@
+# Checks Spoke's Firestore changes and builds the Yarn patch from them.
+#
+# Runs on every pull request into `spoke` and every push to it. A consuming
+# repository's pull request that updates the patch links the run for the
+# `spoke` commit its patch banner names; see spoke-patch/README.md.
+name: Spoke patch
+
+on:
+  pull_request:
+    branches: [spoke]
+  push:
+    branches: [spoke]
+  workflow_dispatch:
+
+concurrency:
+  group: spoke-patch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    name: Test and build the patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream release tags
+        # The fork does not carry upstream's tags, and build-patch.sh builds the
+        # release this branch is based on.
+        run: git fetch --no-tags https://github.com/firebase/firebase-js-sdk.git '+refs/tags/firebase@*:refs/tags/firebase@*'
+      - name: Find the base release
+        id: base
+        run: echo "tag=$(git describe --tags --abbrev=0 --match 'firebase@*' HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: 22.10.0
+      - name: Install
+        run: yarn
+      - name: Build Firestore's dependencies
+        # build:deps also builds Firestore, whose api-report step rewrites the
+        # tracked API reports; build-patch.sh needs a clean tree.
+        run: |
+          yarn --cwd packages/firestore build:deps
+          git checkout -- common/api-review
+      - name: Type-check
+        # This also runs doc_overloads.test.ts's compile-time check.
+        working-directory: packages/firestore
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Unit and spec tests, in memory
+        working-directory: packages/firestore
+        env:
+          NO_TS_NODE: 'true'
+          TEST_PLATFORM: node
+        run: >-
+          ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts
+          --config ../../config/mocharc.node.js
+          'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
+      - name: Spec and local tests, with IndexedDB persistence
+        working-directory: packages/firestore
+        env:
+          NO_TS_NODE: 'true'
+          TEST_PLATFORM: node
+          USE_MOCK_PERSISTENCE: 'YES'
+        run: >-
+          ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts
+          --require test/util/node_persistence.ts --config ../../config/mocharc.node.js
+          'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
+      - name: Build the patch
+        run: spoke-patch/build-patch.sh "${{ steps.base.outputs.tag }}" "$RUNNER_TEMP/firestore.patch"
+      - name: Upload the patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: firestore-patch
+          path: ${{ runner.temp }}/firestore.patch
+          retention-days: 90
