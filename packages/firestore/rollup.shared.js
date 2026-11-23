@@ -160,7 +160,12 @@ const manglePrivatePropertiesOptions = {
   // build. Then subsequent builds using plugin-terser will use the generated
   // name cache to consistently rename properties across chunks.
   // TODO remove this when https://github.com/rollup/plugins/issues/1970 is fixed
-  nameCache: {},
+  // NC_IN loads a name cache saved by an earlier build, so that names the
+  // earlier build mangled keep their mangled names. spoke-patch/build-patch.sh
+  // uses it to keep a patched build's bundles close to the published ones.
+  nameCache: process.env.NC_IN
+    ? JSON.parse(require('fs').readFileSync(process.env.NC_IN, 'utf8'))
+    : {},
   mangle: {
     // Temporary hack fix for an issue where mangled code causes some downstream
     // bundlers (Babel?) to confuse the same variable name in different scopes.
@@ -245,6 +250,16 @@ const manglePrivatePropertiesOptions = {
   }
 };
 exports.manglePrivatePropertiesOptions = manglePrivatePropertiesOptions;
+
+// NC_OUT saves the name cache when the build finishes; see NC_IN above.
+if (process.env.NC_OUT) {
+  process.on('exit', () =>
+    require('fs').writeFileSync(
+      process.env.NC_OUT,
+      JSON.stringify(manglePrivatePropertiesOptions.nameCache)
+    )
+  );
+}
 
 exports.applyPrebuilt = function (name = 'prebuilt.js') {
   return alias({
