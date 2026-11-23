@@ -87,6 +87,11 @@ seed() {
 # bundle); compare-build.mjs then checks every file the patch covers.
 build() {
   local dir=$1 label=$2
+  # rollup-plugin-typescript2 caches compiled files here: the rollup configs pass `cacheDir`,
+  # an option it does not read (it reads `cacheRoot`), so every build shares this folder. Its
+  # cache key leaves out the public names above, so a file compiled by an earlier build, such
+  # as `build:deps` with this branch's declarations in dist/, would keep that build's names.
+  rm -rf "$dir/node_modules/.cache/rollup-plugin-typescript2"
   (cd "$dir" && npx rollup -c rollup.config.js > "$WORK/$label-bundles.log" 2>&1) || true
   (cd "$dir" && npx tsc --emitDeclarationOnly --declaration -p tsconfig.json > "$WORK/$label-tsc.log" 2>&1) || true
   for script in api-report:main api-report:pipelines api-report:lite api-report:lite:pipelines; do
