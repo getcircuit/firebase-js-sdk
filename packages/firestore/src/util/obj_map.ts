@@ -52,7 +52,7 @@ export class ObjectMap<KeyType, ValueType> {
       return undefined;
     }
     for (const [otherKey, value] of matches) {
-      if (this.equalsFn(otherKey, key)) {
+      if (otherKey === key || this.equalsFn(otherKey, key)) {
         return value;
       }
     }
