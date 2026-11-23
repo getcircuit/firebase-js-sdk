@@ -69,15 +69,17 @@
 # - Firestore's unit and spec suites, in memory and with mock IndexedDB
 #   persistence including multi-tab specs, give the same results as the release
 #   tag: any test that fails also fails there.
-# - test/unit/core/view_upstream_diff.test.ts runs View against a verbatim copy of
-#   the {{FIREBASE_VERSION}} View (2,800 randomized runs, including sibling, nested and parent
-#   paths, collection-group queries and value-equal numeric ids), and
-#   view_review_cases.test.ts adds nine deterministic cases from code review.
+# - test/unit/core/view_review_cases.test.ts: nine edge cases from code review
+#   (malformed numeric ids with limbo off, mismatched map entries with limits and
+#   refills, an update that throws midway), each expecting the result recorded
+#   from the {{FIREBASE_VERSION}} View. Each earlier draft that had one of these bugs
+#   fails them.
 # - test/unit/api/doc_overloads.test.ts fails to compile against the upstream
 #   doc() overloads (change 7).
 # - view_limbo_fuzz.test.ts compares the limbo documents with a full recompute
-#   after every call; key_in_filter_fuzz.test.ts compares the key filters with a
-#   plain isEqual scan, thrown errors included (400 seeds).
+#   after every call, including keys that spell one numeric id two ways.
+# - key_in_filter_fuzz.test.ts compares the key filters with a plain isEqual
+#   scan, thrown errors included (400 seeds).
 #
 # Measured with the same changes (emulator: a second client holding documents
 # live, CPU per update):

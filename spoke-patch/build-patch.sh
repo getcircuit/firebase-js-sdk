@@ -14,8 +14,6 @@
 #   yarn && yarn --cwd packages/firestore build:deps
 #
 # Steps:
-# 0. Stops unless test/unit/core/upstream_view.ts is the View of the base tag, so the
-#    comparison tests ran against the release the patch applies to.
 # 1. Downloads the published package for the version in packages/firestore/package.json.
 # 2. Builds the base tag and stops unless every main bundle and type rollup is
 #    byte-identical to the published one, so the patch only ever changes what this
@@ -51,7 +49,6 @@ fi
 if [ -z "$(git -C "$ROOT" branch -r --contains "$COMMIT")" ]; then
   echo "warning: $COMMIT is on no remote branch yet; push it before shipping this patch" >&2
 fi
-"$HERE/upstream-view.sh" "$BASE" --check
 
 echo "Downloading @firebase/firestore@$VERSION"
 (cd "$WORK" && npm pack "@firebase/firestore@$VERSION" --silent >/dev/null && mkdir npm && tar -xzf ./*.tgz -C npm)

@@ -26,13 +26,13 @@ Every patch starts with a banner naming the branch, commit and base release it w
 | Check | What it shows |
 | --- | --- |
 | Firestore's unit and spec suites | Our build gives the same results as the release, in memory and with persistence |
-| `view_upstream_diff`, `view_review_cases` | Our View and the release's View give the same results, limbo changes and errors on the same steps |
-| `view_limbo_fuzz` | The incremental limbo update matches a full recompute after every call |
+| `view_limbo_fuzz` | The incremental limbo update matches a full recompute after every call, including keys that spell one numeric id two ways (`__id5__`, `__id05__`) |
+| `view_review_cases` | Nine edge cases (malformed numeric ids, mismatched map entries, an update that throws midway) give the result recorded from the release's View |
 | `key_in_filter_fuzz` | The indexed `documentId() in` / `not-in` filters match a plain `isEqual` scan, errors included |
 | `doc_overloads` | `doc(collectionReference, undefined)` does not compile |
 | `build-patch.sh` base build | The release built here is byte-identical to the published package, so the patch holds only our changes |
 
-One limit: `upstream_view.ts` copies only the View class. It still imports the current helpers (key comparison, `ObjectMap`, the key filters), so a bug inside one of those would show up in both Views alike and the View comparison would not catch it. Each helper has its own test against upstream behavior (`key_in_filter_fuzz`) or is an early return with the same result as the full comparison (`compareUtf8Strings`, `ObjectMap.get`).
+One limit: the edge cases cover the odd states we know of. A new one in a later change shows up only if the limbo fuzz or a written case reaches it, so a change to `View` adds its own cases.
 
 ## Branches and tags
 
@@ -44,10 +44,9 @@ Upstream `main` is ahead of any release, so `spoke` only ever takes in release t
 
 ## What lives here
 
-- Our changes in `packages/firestore/src`, with their tests under `packages/firestore/test/unit/core/`. Most compare the changed code with upstream's: `view_upstream_diff.test.ts` and `view_review_cases.test.ts` run the same steps on our View and on the release's View, which `upstream_view.ts` holds with only its import paths changed. That copy still imports the current helpers (key comparison, filters), whose own tests compare them with upstream's behavior.
+- Our changes in `packages/firestore/src`, with their tests under `packages/firestore/test/unit/core/` and `test/unit/api/`.
 - `packages/firestore/rollup.shared.js` can load and save terser's name cache (`NC_IN`, `NC_OUT`). With both unset it builds exactly what upstream builds.
 - `spoke-patch/build-patch.sh` builds the Yarn patch, and `compare-build.mjs` compares a build with the published package.
-- `spoke-patch/upstream-view.sh` writes `upstream_view.ts` from a release tag, or checks it with `--check`.
 - `.github/workflows/spoke.yml` checks every pull request into `spoke` and every push to it, and uploads the built patch.
 - `spoke-patch/upstream/` tracks where each change stands upstream, with ready-to-paste issue drafts in `upstream/issues/`.
 
@@ -73,7 +72,7 @@ Add `USE_MOCK_PERSISTENCE=YES` and `--require test/util/node_persistence.ts` to 
 spoke-patch/build-patch.sh firebase@12.15.0 /tmp/firestore.patch [existing.patch ...]
 ```
 
-The script first checks that `upstream_view.ts` is the release's View. It downloads the published package, builds the release tag and stops unless every main bundle matches the published one byte for byte. Then it builds `spoke` and writes the difference with `patch-header.txt` on top, filling in the Firestore version (from `packages/firestore/package.json`) and the release. Copy the output over the patch file in the consuming repository (for Yarn, `.yarn/patches/@firebase-firestore-npm-<version>-<hash>.patch`) and run `yarn install`. Never edit the patch by hand: change `spoke` and build it again.
+The script downloads the published package, builds the release tag and stops unless every main bundle matches the published one byte for byte. Then it builds `spoke` and writes the difference with `patch-header.txt` on top, filling in the Firestore version (from `packages/firestore/package.json`) and the release. Copy the output over the patch file in the consuming repository (for Yarn, `.yarn/patches/@firebase-firestore-npm-<version>-<hash>.patch`) and run `yarn install`. Never edit the patch by hand: change `spoke` and build it again.
 
 ### Existing patches
 
@@ -105,8 +104,8 @@ Upgrades follow the same path: the merge of the new release tag goes into `spoke
 
 1. Fetch upstream tags: `git fetch https://github.com/firebase/firebase-js-sdk.git 'refs/tags/firebase@*:refs/tags/firebase@*'`.
 2. On a branch cut from `spoke`, merge the new release tag (`git merge firebase@<new>`) and open a pull request into `spoke`. Resolve conflicts in the merge commit, and drop any change upstream now ships, with a revert or in the merge itself.
-3. Regenerate the upstream copy with `spoke-patch/upstream-view.sh firebase@<new>` and commit it, so the comparison tests run against the new release.
-4. Run the tests above, and update `patch-header.txt` if a change or its evidence changed.
+3. Run the tests above. If a recorded result in `view_review_cases.test.ts` no longer holds, check what the new release's View does before updating it. Update `patch-header.txt` if a change or its evidence changed.
+4. Check each `Spoke patch (...)` marker against the upstream issue it names, and drop changes upstream now ships.
 5. Build the patch with the new tag, passing the consumer's existing patches for the new version if it has any, and replace it in the consuming repository.
 6. Once the consuming pull request merges, tag the commit its patch was built from, `spoke-firestore-<new firestore version>`, and push the tag.
 

@@ -20,6 +20,9 @@
  * changes as a full recompute after every call, across document updates,
  * local mutations, target changes, `current` flips, pending resets, calls with
  * limbo resolution disabled, going offline, and multi-tab resynchronization.
+ * Two of the keys are one numeric id spelled two ways (`__id5__` and
+ * `__id05__` compare equal), so updates can name a held document by another
+ * spelling; limbo changes must still name the key the view holds.
  */
 
 import { expect } from 'chai';
@@ -50,12 +53,13 @@ import {
   version
 } from '../../util/helpers';
 
-interface ViewInternals {
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+type ViewInternals = {
   documentSet: DocumentSet;
   limboDocuments: DocumentKeySet;
   current: boolean;
   _syncedDocuments: DocumentKeySet;
-}
+};
 
 /** Small deterministic PRNG so failures can be replayed by seed. */
 function random(seed: number): () => number {
@@ -95,7 +99,11 @@ function diff(
 }
 
 describe('View limbo tracking (randomized)', () => {
-  const paths = Array.from({ length: 10 }, (_, i) => `rooms/eros/msgs/${i}`);
+  const paths = [
+    ...Array.from({ length: 10 }, (_, i) => `rooms/eros/msgs/${i}`),
+    'rooms/eros/msgs/__id5__',
+    'rooms/eros/msgs/__id05__'
+  ];
 
   for (const limit of [undefined, 4]) {
     for (let seed = 1; seed <= 150; seed++) {
