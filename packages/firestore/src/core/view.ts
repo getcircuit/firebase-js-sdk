@@ -35,11 +35,12 @@ import {
   queryOrPipelineMatches,
   runPipeline
 } from './pipeline_run';
-import { LimitType, newQueryComparator } from './query';
+import { LimitType, newQueryComparator, queryMatchesKeyPath } from './query';
 import { OnlineState } from './types';
 import {
   ChangeType,
   DocumentChangeSet,
+  DocumentViewChange,
   SyncState,
   ViewSnapshot
 } from './view_snapshot';
@@ -91,6 +92,20 @@ export class View {
   private documentSet: DocumentSet;
   /** Documents in the view but not in the remote target */
   private limboDocuments = documentKeySet();
+  /**
+   * Whether `limboDocuments` may disagree with the current documents and
+   * synced keys. It is set when a call skips the limbo update or replaces the
+   * synced keys, and the next limbo update then checks every document instead
+   * of only the keys that call changed.
+   */
+  private limboDocumentsNeedFullCheck = true;
+  /**
+   * Whether the view has held a document or synced key with a numeric ID
+   * segment. Numeric IDs compare by value, so one key can be spelled several
+   * ways (__id5__, __id05__), and malformed ones make comparisons throw. Such
+   * views always check every document for limbo, exactly as a full walk does.
+   */
+  private hasHeldNumericIdKeys: boolean;
   /** Document Keys that have local changes */
   private mutatedKeys = documentKeySet();
   /** Query comparator that defines the document order in this view. */
@@ -105,6 +120,7 @@ export class View {
       ? newPipelineComparator(query)
       : newQueryComparator(query);
     this.documentSet = new DocumentSet(this.docComparator);
+    this.hasHeldNumericIdKeys = keySetHasNumericIdSegment(_syncedDocuments);
   }
 
   /**
@@ -119,7 +135,8 @@ export class View {
    * Iterates over a set of doc changes, applies the query limit, and computes
    * what the new results should be, what the changes were, and whether we may
    * need to go back to the local cache for more results. Does not make any
-   * changes to the view.
+   * changes to the view, except that a map entry whose key is spelled unlike
+   * its document's key marks the limbo documents for a full check.
    * @param docChanges - The doc changes to apply to this view.
    * @param previousChanges - If this is being called with a refill, then start
    *        with this set of docs and changes instead of the current view.
@@ -147,6 +164,27 @@ export class View {
     );
 
     docChanges.inorderTraversal((key, entry) => {
+      if (entry.key !== key && key.toString() !== entry.key.toString()) {
+        // The document set lookup uses the map key and the query match uses
+        // the document's key. When they are spelled differently, this call's
+        // change set may not describe every change to the document set, so
+        // the next limbo update checks every document.
+        this.limboDocumentsNeedFullCheck = true;
+      } else if (
+        !isPipeline(this.query) &&
+        !key.path.hasNumericIdSegment() &&
+        !queryMatchesKeyPath(this.query, key)
+      ) {
+        // Every document the view holds matched its query, and the path check
+        // depends only on the key. A document outside the query's path is
+        // therefore neither in the view nor a new match, so it changes nothing.
+        // The sync engine offers every changed document to every view, so this
+        // skips most of them before the document set lookup. Numeric ID
+        // segments compare by value in the document set but by spelling in the
+        // path check (__id5__ and __id05__ are one key), so those are never
+        // skipped.
+        return;
+      }
       const oldDoc = oldDocumentSet.get(key);
       const newDoc = queryOrPipelineMatches(
         this.query,
@@ -367,11 +405,20 @@ export class View {
       !docChanges.needsRefill,
       'Cannot apply changes that need a refill'
     );
+    // The limbo documents count as unchecked until this call has updated them,
+    // so a call that throws or skips the update leaves the next one to check
+    // every document.
+    const limboDocumentsWereChecked = !this.limboDocumentsNeedFullCheck;
+    this.limboDocumentsNeedFullCheck = true;
+    const changes = docChanges.changeSet.getChanges();
+    if (changesHaveNumericIdSegment(changes, targetChange)) {
+      this.hasHeldNumericIdKeys = true;
+    }
+
     const oldDocs = this.documentSet;
     this.documentSet = docChanges.documentSet;
     this.mutatedKeys = docChanges.mutatedKeys;
     // Sort changes based on type and query comparator
-    const changes = docChanges.changeSet.getChanges();
     changes.sort((c1, c2) => {
       return (
         compareChangeType(c1.type, c2.type) ||
@@ -384,7 +431,11 @@ export class View {
     targetIsPendingReset = targetIsPendingReset ?? false;
     const limboChanges =
       limboResolutionEnabled && !targetIsPendingReset
-        ? this.updateLimboDocuments()
+        ? this.updateLimboDocuments(
+            limboDocumentsWereChecked && !this.hasHeldNumericIdKeys,
+            changes,
+            targetChange
+          )
         : [];
 
     // We are at synced state if there is no limbo docs are waiting to be resolved, view is current
@@ -491,35 +542,74 @@ export class View {
     }
   }
 
-  private updateLimboDocuments(): LimboDocumentChange[] {
+  /**
+   * Brings `limboDocuments` up to date and returns which keys entered or left
+   * limbo, removed keys first, each group in key order.
+   *
+   * @param checkChangedKeysOnly - Whether `limboDocuments` matched the view
+   *        before this call, so only the keys this call changed need checking.
+   *        Otherwise every document is checked.
+   * @param changes - This call's document changes.
+   * @param targetChange - This call's target change, if any.
+   */
+  private updateLimboDocuments(
+    checkChangedKeysOnly: boolean,
+    changes: DocumentViewChange[],
+    targetChange?: TargetChange
+  ): LimboDocumentChange[] {
     // We can only determine limbo documents when we're in-sync with the server.
     if (!this.current) {
       return [];
     }
 
-    // TODO(klimt): Do this incrementally so that it's not quadratic when
-    // updating many documents.
     const oldLimboDocuments = this.limboDocuments;
-    this.limboDocuments = documentKeySet();
-    this.documentSet.forEach(doc => {
-      if (this.shouldBeInLimbo(doc.key)) {
-        this.limboDocuments = this.limboDocuments.add(doc.key);
-      }
-    });
+    const removed: LimboDocumentChange[] = [];
+    const added: LimboDocumentChange[] = [];
 
-    // Diff the new limbo docs with the old limbo docs.
-    const changes: LimboDocumentChange[] = [];
-    oldLimboDocuments.forEach(key => {
-      if (!this.limboDocuments.has(key)) {
-        changes.push(new RemovedLimboDocument(key));
+    if (checkChangedKeysOnly) {
+      // Limbo membership depends only on the document set and the synced
+      // keys, so it can change only for keys that one of them changed.
+      let changedKeys = documentKeySet();
+      for (const change of changes) {
+        changedKeys = changedKeys.add(change.doc.key);
       }
-    });
-    this.limboDocuments.forEach(key => {
-      if (!oldLimboDocuments.has(key)) {
-        changes.push(new AddedLimboDocument(key));
+      if (targetChange) {
+        changedKeys = changedKeys
+          .unionWith(targetChange.addedDocuments)
+          .unionWith(targetChange.removedDocuments);
       }
-    });
-    return changes;
+      changedKeys.forEach(key => {
+        const wasInLimbo = oldLimboDocuments.has(key);
+        const isInLimbo = this.shouldBeInLimbo(key);
+        if (wasInLimbo && !isInLimbo) {
+          this.limboDocuments = this.limboDocuments.delete(key);
+          removed.push(new RemovedLimboDocument(key));
+        } else if (!wasInLimbo && isInLimbo) {
+          this.limboDocuments = this.limboDocuments.add(key);
+          added.push(new AddedLimboDocument(key));
+        }
+      });
+    } else {
+      this.limboDocuments = documentKeySet();
+      this.documentSet.forEach(doc => {
+        if (this.shouldBeInLimbo(doc.key)) {
+          this.limboDocuments = this.limboDocuments.add(doc.key);
+        }
+      });
+      oldLimboDocuments.forEach(key => {
+        if (!this.limboDocuments.has(key)) {
+          removed.push(new RemovedLimboDocument(key));
+        }
+      });
+      this.limboDocuments.forEach(key => {
+        if (!oldLimboDocuments.has(key)) {
+          added.push(new AddedLimboDocument(key));
+        }
+      });
+    }
+
+    this.limboDocumentsNeedFullCheck = false;
+    return removed.concat(added);
   }
 
   /**
@@ -545,6 +635,10 @@ export class View {
   synchronizeWithPersistedState(queryResult: QueryResult): ViewChange {
     this._syncedDocuments = queryResult.remoteKeys;
     this.limboDocuments = documentKeySet();
+    this.limboDocumentsNeedFullCheck = true;
+    if (keySetHasNumericIdSegment(queryResult.remoteKeys)) {
+      this.hasHeldNumericIdKeys = true;
+    }
     const docChanges = this.computeDocChanges(queryResult.documents);
     return this.applyChanges(docChanges, /* limboResolutionEnabled= */ true);
   }
@@ -564,6 +658,33 @@ export class View {
       this.hasCachedResults
     );
   }
+}
+
+/**
+ * Returns whether any document or target key in one call's changes has a
+ * numeric ID segment. Reads keys without comparing them, since comparing a
+ * malformed numeric ID throws.
+ */
+function changesHaveNumericIdSegment(
+  changes: DocumentViewChange[],
+  targetChange?: TargetChange
+): boolean {
+  return (
+    changes.some(change => change.doc.key.path.hasNumericIdSegment()) ||
+    (targetChange !== undefined &&
+      (keySetHasNumericIdSegment(targetChange.addedDocuments) ||
+        keySetHasNumericIdSegment(targetChange.removedDocuments)))
+  );
+}
+
+/** Returns whether any key in a set has a numeric ID segment. */
+function keySetHasNumericIdSegment(keys: DocumentKeySet): boolean {
+  let found = false;
+  keys.forEachWhile(key => {
+    found = key.path.hasNumericIdSegment();
+    return !found;
+  });
+  return found;
 }
 
 function compareChangeType(c1: ChangeType, c2: ChangeType): number {

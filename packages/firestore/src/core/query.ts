@@ -461,12 +461,20 @@ function queryMatchesPathAndCollectionGroup(
   query: Query,
   doc: Document
 ): boolean {
-  const docPath = doc.key.path;
+  return queryMatchesKeyPath(query, doc.key);
+}
+
+/**
+ * Returns whether a key's path is in the query's collection, collection group
+ * or document. A document whose key fails it can never match the query.
+ */
+export function queryMatchesKeyPath(query: Query, key: DocumentKey): boolean {
+  const docPath = key.path;
   if (query.collectionGroup !== null) {
     // NOTE: this.path is currently always empty since we don't expose Collection
     // Group queries rooted at a document path yet.
     return (
-      doc.key.hasCollectionId(query.collectionGroup) &&
+      key.hasCollectionId(query.collectionGroup) &&
       query.path.isPrefixOf(docPath)
     );
   } else if (DocumentKey.isDocumentKey(query.path)) {
