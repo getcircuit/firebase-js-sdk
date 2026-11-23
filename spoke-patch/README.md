@@ -88,14 +88,14 @@ The `doc()` type fix (change 7) came from such a patch, written for 4.5.0.
 ```mermaid
 flowchart LR
   A["branch from spoke<br/>one commit per change"] --> B["PR into spoke<br/>CI: types, tests, patch build"]
-  B -->|"Rebase and merge"| C["push to spoke<br/>CI builds the patch artifact"]
+  B -->|"fast-forward spoke"| C["push to spoke<br/>CI builds the patch artifact"]
   C --> D["consumer PR<br/>links the fork PR and the run"]
 ```
 
 1. Cut a branch from `spoke` and make the change: one commit per change, each with its test, its `Spoke patch (...)` markers, and updates to `patch-header.txt` and `upstream/`.
 2. Open a pull request into `spoke` in this fork. `.github/workflows/spoke.yml` type-checks, runs the unit and spec tests in memory and with persistence, and builds the patch (uploaded as the `firestore-patch` artifact). It must pass before merging.
-3. Merge with "Rebase and merge", so `spoke` stays one commit per change. The push to `spoke` runs the workflow again and builds the patch from the `spoke` commit.
-4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact, or with a local `build-patch.sh` build of the same commit, which gives the same file. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit.
+3. Merge by fast-forwarding `spoke` to the branch: rebase the branch onto `spoke` if it is behind, then `git push <fork remote> <branch>:spoke`. `spoke` stays one commit per change, and GitHub marks the pull request merged. The fork does not allow rebase merges in the web interface. The push to `spoke` runs the workflow again and builds the patch from the `spoke` commit.
+4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit. Use local `build-patch.sh` builds for checking only: built on macOS, the minified bundles can name some properties differently from the CI build (for 80b55f6, `hasNumericIdSegment` stays unminified in CI and becomes `ht` locally). The code is the same; the cause is not known yet.
 5. Once that pull request merges, tag the commit as in step 6 below.
 
 Upgrades follow the same path: the merge of the new release tag goes into `spoke` through a pull request too.
