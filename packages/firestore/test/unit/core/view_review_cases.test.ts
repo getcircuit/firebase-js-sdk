@@ -24,11 +24,11 @@ import { expect } from 'chai';
 
 import { LimitType, queryWithLimit } from '../../../src/core/query';
 import { View } from '../../../src/core/view';
-import { MutableDocument } from '../../../src/model/document';
 import {
   documentKeySet,
   mutableDocumentMap
 } from '../../../src/model/collections';
+import { MutableDocument } from '../../../src/model/document';
 import {
   deletedDoc,
   doc,

@@ -50,12 +50,12 @@ import {
   version
 } from '../../util/helpers';
 
-type ViewInternals = {
+interface ViewInternals {
   documentSet: DocumentSet;
   limboDocuments: DocumentKeySet;
   current: boolean;
   _syncedDocuments: DocumentKeySet;
-};
+}
 
 /** Small deterministic PRNG so failures can be replayed by seed. */
 function random(seed: number): () => number {

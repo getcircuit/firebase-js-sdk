@@ -153,7 +153,7 @@ describe('View limbo: patched vs upstream (scratch)', () => {
             for (const p of pick(0.4)) {
               remoteKeys = remoteKeys.add(key(p));
             }
-            let ca, cb;
+            let cb;
             try {
               cb = b.synchronizeWithPersistedState({
                 documents: cache,
@@ -163,7 +163,7 @@ describe('View limbo: patched vs upstream (scratch)', () => {
               // Both views must stay in identical states; give up on seed.
               return;
             }
-            ca = a.synchronizeWithPersistedState({
+            const ca = a.synchronizeWithPersistedState({
               documents: cache,
               remoteKeys
             });

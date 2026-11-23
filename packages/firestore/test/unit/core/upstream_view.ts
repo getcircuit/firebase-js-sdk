@@ -20,18 +20,6 @@
  * except for import paths. Tests run the same steps on it and on the current
  * View and expect identical results, limbo changes and errors.
  */
-import { QueryResult } from '../../../src/local/local_store_impl';
-import {
-  documentKeySet,
-  DocumentKeySet,
-  DocumentMap
-} from '../../../src/model/collections';
-import { Document, MutableDocument } from '../../../src/model/document';
-import { DocumentKey } from '../../../src/model/document_key';
-import { DocumentSet } from '../../../src/model/document_set';
-import { TargetChange } from '../../../src/remote/remote_event';
-import { debugAssert, fail } from '../../../src/util/assert';
-
 import { isPipeline, QueryOrPipeline } from '../../../src/core/pipeline-util';
 import {
   getLastEffectiveLimit,
@@ -48,6 +36,17 @@ import {
   SyncState,
   ViewSnapshot
 } from '../../../src/core/view_snapshot';
+import { QueryResult } from '../../../src/local/local_store_impl';
+import {
+  documentKeySet,
+  DocumentKeySet,
+  DocumentMap
+} from '../../../src/model/collections';
+import { Document, MutableDocument } from '../../../src/model/document';
+import { DocumentKey } from '../../../src/model/document_key';
+import { DocumentSet } from '../../../src/model/document_set';
+import { TargetChange } from '../../../src/remote/remote_event';
+import { debugAssert, fail } from '../../../src/util/assert';
 
 export type LimboDocumentChange = AddedLimboDocument | RemovedLimboDocument;
 export class AddedLimboDocument {

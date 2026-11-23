@@ -30,7 +30,17 @@ DOC
   git -C "$ROOT" show "$TAG:packages/firestore/src/core/view.ts" |
     sed -n '/^import/,$p' |
     sed -e "s#from '\.\./#from '../../../src/#g" -e "s#from '\./#from '../../../src/core/#g"
-} | (cd "$ROOT" && npx prettier --stdin-filepath "$TARGET") > "$GENERATED"
+} > "$GENERATED"
+
+# Rebasing the paths changes how the imports sort, so apply the package's ESLint fixes
+# (import order) and then Prettier, as upstream's lint and format checks expect. ESLint
+# resolves its config by path, so the file sits next to the target while it runs.
+SCRATCH="$ROOT/packages/firestore/test/unit/core/upstream_view.generating.ts"
+cp "$GENERATED" "$SCRATCH"
+trap 'rm -f "$GENERATED" "$SCRATCH"' EXIT
+(cd "$ROOT/packages/firestore" && npx eslint -c .eslintrc.js --fix "$SCRATCH" >&2)
+(cd "$ROOT" && npx prettier --write "$SCRATCH" > /dev/null)
+cp "$SCRATCH" "$GENERATED"
 
 if [ "${2:-}" = --check ]; then
   if ! cmp -s "$GENERATED" "$ROOT/$TARGET"; then
