@@ -670,7 +670,7 @@ export class WatchChangeAggregator {
             : targetData.target.path;
           const key = new DocumentKey(path);
           if (
-            !this.ensureDocumentUpdateByTarget(key).has(targetId) &&
+            !this.pendingDocumentUpdatesByTarget.get(key)?.has(targetId) &&
             !this.targetContainsDocument(targetId, key)
           ) {
             this.removeDocumentFromTarget(
