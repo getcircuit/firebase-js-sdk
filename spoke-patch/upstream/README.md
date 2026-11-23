@@ -1,0 +1,18 @@
+# Upstream status
+
+Where each change on `spoke` stands upstream, and the issue to open when there is none. Searched firebase/firebase-js-sdk issues and pull requests on 2026-11-23 for: updateLimboDocuments, limbo incrementally, limbo performance many listeners, onSnapshot performance, onSnapshot CPU many listeners, KeyFieldInFilter, documentId in performance, compareUtf8Strings performance, ensureDocumentUpdateByTarget, computeDocChanges performance, ObjectMap canonifyQuery performance.
+
+| Change | Commit | Upstream | Next step |
+| --- | --- | --- | --- |
+| Incremental limbo update (1) and path skip (6) | [ba285eb](https://github.com/getcircuit/firebase-js-sdk/commit/ba285eb) | None found. The code carries `TODO(klimt): Do this incrementally`. Related but different, both closed: [#2668](https://github.com/firebase/firebase-js-sdk/issues/2668) (`SortedSet.unionWith`, fixed in 2020) and [#6578](https://github.com/firebase/firebase-js-sdk/issues/6578) (closed as stale). | TODO: open [limbo-walk](issues/limbo-walk.md), then offer the commit as a pull request. |
+| Indexed `documentId()` in / not-in filters (5) | [706ab39](https://github.com/getcircuit/firebase-js-sdk/commit/706ab39) | None found. | TODO: open [key-filter-scan](issues/key-filter-scan.md). |
+| Pending update lookup (2), equal-string compare (3), `ObjectMap` identity (4) | [d532fb9](https://github.com/getcircuit/firebase-js-sdk/commit/d532fb9), [e133b5b](https://github.com/getcircuit/firebase-js-sdk/commit/e133b5b), [1510bd5](https://github.com/getcircuit/firebase-js-sdk/commit/1510bd5) | None found. | TODO: offer as one small pull request after the limbo-walk issue, citing it; too small for issues of their own. |
+| `doc(collectionReference, path)` types (7) | [3a7e86f](https://github.com/getcircuit/firebase-js-sdk/commit/3a7e86f) | Open: [#7826](https://github.com/firebase/firebase-js-sdk/issues/7826). | TODO: comment on #7826 with the overload split and offer a pull request. |
+
+Update this table in the same commit as any change, and replace a TODO with the link once the issue or pull request exists.
+
+## Issue drafts
+
+`issues/` holds one draft per likely upstream issue, ready to paste: [limbo-walk](issues/limbo-walk.md), [key-filter-scan](issues/key-filter-scan.md). Add a draft whenever a change has no upstream issue, and delete it once the issue is open (the table keeps the link).
+
+Drafts are generic on purpose: no product, customer or company detail. The repro sketches show the shape of the workload. The numbers come from a benchmark of the same shape (a second client holds the documents live while another client updates one unrelated document 200 times, against the emulator; process CPU per update), not from running the sketch itself.
