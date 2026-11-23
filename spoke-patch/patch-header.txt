@@ -1,5 +1,6 @@
 # Makes @firebase/firestore {{FIRESTORE_VERSION}} (firebase {{FIREBASE_VERSION}}) do work per server update in
-# proportion to what changed, not to everything the client holds live.
+# proportion to what changed, not to everything the client holds live, and keep one
+# copy of a document's fields where it kept one per cache entry and per view.
 #
 # Why: on every server update (remote event), local write, ack or bundle load, the
 # client revisits every listener's view and some per-listener state. A page holding
@@ -64,7 +65,17 @@
 #    and then threw at runtime. It is now doc(reference) for a generated ID and
 #    doc(reference, path: string, ...pathSegments). Only the type rollups change.
 #
-# Behavior: changes 1-6 return the same results, emit the same limbo changes in
+# 8. ObjectValue / MutableDocument.mutableCopy (memory)
+#    The memory cache hands out a copy of a document on every read, and stores one
+#    on every write, so views do not see each other's local writes. Each copy
+#    deep-cloned the document's fields: a document held by the cache and by four
+#    views was stored five times. A copy now shares the fields until either side
+#    writes through set(), setAll() or delete(), which copy them first. Each
+#    copy still has its own version, read time and pending-write state. clone()
+#    still copies the fields at once; the SDK uses it where raw fields leave its
+#    control.
+#
+# Behavior: changes 1-6 and 8 return the same results, emit the same limbo changes in
 # the same order and throw the same errors as upstream. Checked on the branch:
 # - Firestore's unit and spec suites, in memory and with mock IndexedDB
 #   persistence including multi-tab specs, give the same results as the release
@@ -80,6 +91,11 @@
 #   after every call, including keys that spell one numeric id two ways.
 # - key_in_filter_fuzz.test.ts compares the key filters with a plain isEqual
 #   scan, thrown errors included (400 seeds).
+# - object_value_copies.test.ts runs random set/setAll/delete/copy sequences on
+#   shared copies and on deep copies (300 seeds) and expects the same fields. The
+#   memory cache and LocalStore tests check that cache reads share fields, and that
+#   documents a remote event returned keep their fields through a later local write
+#   and its rejection.
 #
 # Measured with the same changes (emulator: a second client holding documents
 # live, CPU per update):
@@ -90,6 +106,11 @@
 #   0.16 s.
 # - On the live page above, 60-240 s after load: event-loop delay p95 83-96 ->
 #   31-42 ms, long-task share 12-13% -> 2.5-10%. First publish (~40 s) is unchanged.
+# - Change 8, heap after GC with a second client holding 300 documents of about
+#   50 nested maps each (memory cache, Node, 3 runs): one query +20.0 -> +13.7 MiB;
+#   four more queries over the same documents +27.5 -> +2.2 MiB, their first
+#   (cached) snapshot 54-66 -> 15-19 ms. Remote updates, offline writes and acks
+#   take the same time, and every listener matches a server read at the end.
 #
 # Files: the main build's bundles that change (the common-* chunks, index.rn.js,
 # whose local names shift, and intermediate/), and the type rollups that change

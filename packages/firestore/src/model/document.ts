@@ -359,6 +359,10 @@ export class MutableDocument implements Document {
     );
   }
 
+  /**
+   * Returns a copy with its own version, read time and state. The two share
+   * field data until either one writes to it; see `ObjectValue.mutableCopy()`.
+   */
   mutableCopy(): MutableDocument {
     return new MutableDocument(
       this.key,
@@ -366,7 +370,11 @@ export class MutableDocument implements Document {
       this.version,
       this.readTime,
       this.createTime,
-      this.data.clone(),
+      // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+      // Shares the fields; `ObjectValue` copies them before the first write on
+      // either side. The version, read time and state above need no copy:
+      // versions are immutable and the state is a plain value.
+      this.data.mutableCopy(),
       this.documentState
     );
   }

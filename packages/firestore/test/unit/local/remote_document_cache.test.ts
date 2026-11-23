@@ -71,6 +71,36 @@ describe('MemoryRemoteDocumentCache', () => {
   genericRemoteDocumentCacheTests(() => cache);
 
   eagerRemoteDocumentCacheTests(() => cache);
+
+  // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+  it('shares field data between the cached document and its reads until one changes a field', async () => {
+    const remoteDocuments = await cache;
+    const stored = doc('coll/doc', 1, { state: 'old', nested: { a: 1 } });
+    await remoteDocuments.addEntries([stored.setReadTime(version(1))]);
+
+    // Read the document through each of the cache's read paths.
+    const byKey = await remoteDocuments.getEntry(key('coll/doc'));
+    const byKeys = await remoteDocuments
+      .getEntries(documentKeySet(key('coll/doc')))
+      .then(m => m.get(key('coll/doc'))!);
+    const byQuery = await remoteDocuments
+      .getDocumentsMatchingQuery(
+        query('coll'),
+        IndexOffset.min(),
+        newOverlayMap()
+      )
+      .then(m => m.get(key('coll/doc'))!);
+    // Every read holds the stored document's proto object, not a copy of it.
+    expect(byKey.data.value).to.equal(stored.data.value);
+    expect(byKeys.data.value).to.equal(stored.data.value);
+    expect(byQuery.data.value).to.equal(stored.data.value);
+
+    // A write through one read stays out of the other reads and the cache.
+    byKey.data.set(field('nested.a'), wrap(2));
+    expect(byKeys.data.field(field('nested.a'))).to.deep.equal(wrap(1));
+    const reread = await remoteDocuments.getEntry(key('coll/doc'));
+    expect(reread.data.field(field('nested.a'))).to.deep.equal(wrap(1));
+  });
 });
 
 describe('LRU MemoryRemoteDocumentCache', () => {

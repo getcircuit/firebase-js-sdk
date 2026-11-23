@@ -35,11 +35,45 @@ export interface JsonObject<T> {
  * ability to add and remove fields (via the ObjectValueBuilder).
  */
 export class ObjectValue {
-  constructor(readonly value: { mapValue: ProtoMapValue }) {
+  // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+  // `mutableCopy()` lets two ObjectValues share one proto. Both are then marked
+  // shared, and each copies the proto before its first write, so a write never
+  // shows through the other.
+
+  /** The fields this ObjectValue reads and writes, possibly shared. */
+  private proto: { mapValue: ProtoMapValue };
+
+  /**
+   * Whether another ObjectValue may hold `proto` too.
+   *
+   * `mutableCopy()` sets it on both sides, and only `ensureWritable()` clears
+   * it, after this side copies the proto. Nothing counts the holders, so a side
+   * whose partner already copied away still copies once on its next write. That
+   * extra copy costs time but never lets a write leak.
+   */
+  private sharesProto = false;
+
+  constructor(value: { mapValue: ProtoMapValue }) {
     debugAssert(
       !isServerTimestamp(value),
       'ServerTimestamps should be converted to ServerTimestampValue'
     );
+    // The new ObjectValue takes over the proto it receives: `set()`, `setAll()`
+    // and `delete()` write into it in place.
+    this.proto = value;
+  }
+
+  /**
+   * The document's fields as a proto map value, for reading only.
+   *
+   * The proto, and every value `field()` returns from it, may be shared with
+   * other ObjectValues, so changing it in place would change them too. Change
+   * fields through `set()`, `setAll()` or `delete()`, or use `clone()` for a
+   * proto of your own.
+   */
+  get value(): { mapValue: ProtoMapValue } {
+    // Returns the proto itself: copying it here would cost what sharing saves.
+    return this.proto;
   }
 
   static empty(): ObjectValue {
@@ -126,6 +160,12 @@ export class ObjectValue {
       !path.isEmpty(),
       'Cannot delete field for empty path on ObjectValue'
     );
+    // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+    // The delete below changes the proto in place, so this side needs a proto
+    // of its own first.
+    this.ensureWritable();
+    // Look the parent up only after `ensureWritable()`, which may replace the
+    // proto: a parent found earlier would belong to the shared one.
     const nestedValue = this.field(path.popLast());
     if (isMapValue(nestedValue) && nestedValue.mapValue.fields) {
       delete nestedValue.mapValue.fields[path.lastSegment()];
@@ -141,7 +181,12 @@ export class ObjectValue {
    * entry does not yet exist, or if it is not a map, a new map will be created.
    */
   private getFieldsMap(path: FieldPath): Record<string, ProtoValue> {
-    let current = this.value;
+    // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+    // `set()` and `setAll()` write through the map returned here, so it must
+    // come from a proto this side does not share.
+    this.ensureWritable();
+    // Read the proto only after `ensureWritable()`, which may replace it.
+    let current = this.proto;
 
     if (!current.mapValue!.fields) {
       current.mapValue = { fields: {} };
@@ -174,10 +219,53 @@ export class ObjectValue {
     }
   }
 
+  /**
+   * Returns a copy with its own deep copy of the proto.
+   *
+   * It always copies, shared or not, because callers may change the returned
+   * proto directly.
+   */
   clone(): ObjectValue {
     return new ObjectValue(
-      deepClone(this.value) as { mapValue: ProtoMapValue }
+      deepClone(this.proto) as { mapValue: ProtoMapValue }
     );
+  }
+
+  // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+  /**
+   * Returns a copy that shares this proto until either one writes.
+   *
+   * After this call, change both this ObjectValue and the copy only through
+   * `set()`, `setAll()` and `delete()`. Any call to them copies the proto
+   * first, even one that changes nothing, such as `setAll()` with an empty
+   * map. Use `clone()` when some code will change the raw proto.
+   */
+  mutableCopy(): ObjectValue {
+    // The copy receives the same proto object, not a copy of it.
+    const copy = new ObjectValue(this.proto);
+    // Mark both sides: either one may write first, and the other must keep the
+    // fields it had.
+    this.sharesProto = true;
+    copy.sharesProto = true;
+    return copy;
+  }
+
+  // Spoke patch (field-copies): spoke-patch/upstream/issues/field-copies.md.
+  /**
+   * Gives this ObjectValue a proto of its own before it writes to a shared one.
+   *
+   * The write methods call it before changing the proto: `getFieldsMap()` for
+   * `set()` and `setAll()`, and `delete()` directly.
+   */
+  private ensureWritable(): void {
+    if (this.sharesProto) {
+      // Only this side moves to the new proto. Every other holder keeps the old
+      // one and stays marked shared, so it copies too before it writes.
+      this.proto = deepClone(this.proto) as { mapValue: ProtoMapValue };
+      // This side is now the only holder of its proto, so its later writes
+      // copy nothing.
+      this.sharesProto = false;
+    }
   }
 }
 

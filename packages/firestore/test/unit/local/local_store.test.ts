@@ -125,6 +125,7 @@ import {
   TestSnapshotVersion,
   unknownDoc,
   version,
+  wrap,
   addWatchTargets
 } from '../../util/helpers';
 import { pipelineFromStages } from '../../util/pipelines';
@@ -1699,6 +1700,47 @@ function genericLocalStoreTests(
       .toReturnChanged(doc('foo/bar', 1, { sum: 1 }).setHasLocalMutations())
       .toContain(doc('foo/bar', 1, { sum: 1 }).setHasLocalMutations())
       .finish();
+  });
+
+  it('keeps returned documents unchanged through a later local write and its rejection', async () => {
+    const tester = expectLocalStore();
+    await tester
+      .afterAllocatingQuery(query('foo'))
+      .toReturnTargetId(2)
+      .finish();
+    const localStore = tester.localStore;
+
+    // The server sends the document; LocalStore returns it as a view would
+    // receive it.
+    const fromServer = await localStoreApplyRemoteEventToLocalCache(
+      localStore,
+      docAddedRemoteEvent(doc('foo/bar', 1, { m: { x: 1 }, a: 'a' }), [2])
+    );
+    const held = fromServer.get(key('foo/bar'))!;
+
+    // A local patch changes one nested field and adds another. LocalStore
+    // applies it to a copy of the cached document.
+    const write = await localStoreWriteLocally(localStore, [
+      patchMutation('foo/bar', { 'm.x': 2, 'm.y': 'y' })
+    ]);
+    const local = write.changes.get(key('foo/bar'))!;
+    expect(local.data.field(field('m.x'))).to.deep.equal(wrap(2));
+    // The document returned before the write does not see the patch.
+    expect(held.data.field(field('m.x'))).to.deep.equal(wrap(1));
+    expect(held.data.field(field('m.y'))).to.be.null;
+
+    // The server rejects the write, so LocalStore drops it.
+    await localStoreRejectBatch(localStore, write.batchId);
+    const afterRejection = await localStoreReadDocument(
+      localStore,
+      key('foo/bar')
+    );
+    // The cache still holds the server's fields: the patch never reached it.
+    expect(afterRejection.data.field(field('m.x'))).to.deep.equal(wrap(1));
+    expect(afterRejection.data.field(field('m.y'))).to.be.null;
+    // Documents handed out earlier keep what they had when they were returned.
+    expect(local.data.field(field('m.x'))).to.deep.equal(wrap(2));
+    expect(held.data.field(field('m.x'))).to.deep.equal(wrap(1));
   });
 
   it('handles saving bundled documents', () => {

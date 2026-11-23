@@ -59,7 +59,7 @@ jobs:
         run: >-
           ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts
           --config ../../config/mocharc.node.js --grep 'skips a cache that is too small' --invert
-          'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
+          'test/unit/model/*.test.ts' 'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
       - name: Spec and local tests, with IndexedDB persistence
         working-directory: packages/firestore
         env:
