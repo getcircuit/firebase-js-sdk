@@ -1,3 +1,6 @@
+> [!NOTE]
+> **This is Spoke's fork.** The `spoke` branch carries performance changes to `@firebase/firestore` that Spoke ships as a Yarn patch to the published package. `main` mirrors upstream and holds no changes of ours. See [spoke-patch/README.md](spoke-patch/README.md) for what the changes are, how to build the patch and how to move to a new SDK release.
+
 # Firebase JavaScript SDK
 
 <!-- BADGES -->

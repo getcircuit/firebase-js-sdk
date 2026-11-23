@@ -1,11 +1,12 @@
 # Makes @firebase/firestore 4.16.0 (firebase 12.15.0) do work per server update in
 # proportion to what changed, not to everything the client holds live.
 #
-# Source: branch spoke/firestore-4.16.0 of github.com/getcircuit/firebase-js-sdk,
-# one commit per change on top of tag firebase@12.15.0. spoke-patch/build-patch.sh
-# on that branch generates this file: it builds the tag, checks that the build is
-# byte-identical to the published package, builds the branch and diffs the two.
-# Do not edit the diff below by hand; change the branch and regenerate it.
+# Source: tag spoke-firestore-4.16.0 (branch spoke) of
+# github.com/getcircuit/firebase-js-sdk, our changes on top of tag firebase@12.15.0.
+# spoke-patch/build-patch.sh there generates this file: it builds the release tag,
+# checks that the build is byte-identical to the published package, builds our
+# changes and diffs the two. Do not edit the diff below by hand; change the branch
+# and regenerate it.
 #
 # Why: on every server update (remote event), local write, ack or bundle load, the
 # client revisits every listener's view and some per-listener state. A page holding
@@ -92,7 +93,7 @@
 # whose local names shift, and intermediate/). The lite/ bundles are not rebuilt
 # and stay as published.
 #
-# Upgrading @firebase/firestore: this patch applies to 4.16.0 only. Rebase the
-# branch onto the new firebase@ tag, run the tests above, regenerate this file
-# with spoke-patch/build-patch.sh, or delete the patch once upstream ships
-# equivalents.
+# Upgrading @firebase/firestore: this patch applies to 4.16.0 only. Merge the new
+# firebase@ tag into the spoke branch, run the tests above and regenerate this file
+# with spoke-patch/build-patch.sh (spoke-patch/README.md has the steps), or delete
+# the patch once upstream ships equivalents.
