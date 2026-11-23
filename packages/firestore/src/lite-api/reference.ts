@@ -590,13 +590,23 @@ export function doc(
 ): DocumentReference<DocumentData, DocumentData>;
 /**
  * Gets a `DocumentReference` instance that refers to a document within
- * `reference` at the specified relative path. If no path is specified, an
- * automatically-generated unique ID will be used for the returned
- * `DocumentReference`.
+ * `reference` with an automatically-generated unique ID.
  *
  * @param reference - A reference to a collection.
- * @param path - A slash-separated path to a document. Has to be omitted to use
- * auto-generated IDs.
+ * @returns The `DocumentReference` instance.
+ */
+export function doc<AppModelType, DbModelType extends DocumentData>(
+  reference: CollectionReference<AppModelType, DbModelType>
+): DocumentReference<AppModelType, DbModelType>;
+/**
+ * Gets a `DocumentReference` instance that refers to a document within
+ * `reference` at the specified relative path.
+ *
+ * `path` is required here: passing `undefined` throws at runtime, so the type
+ * rejects it. Call `doc(reference)` for an automatically-generated ID.
+ *
+ * @param reference - A reference to a collection.
+ * @param path - A slash-separated path to a document.
  * @param pathSegments - Additional path segments that will be applied relative
  * to the first argument.
  * @throws If the final path has an odd number of segments and does not point to
@@ -605,7 +615,7 @@ export function doc(
  */
 export function doc<AppModelType, DbModelType extends DocumentData>(
   reference: CollectionReference<AppModelType, DbModelType>,
-  path?: string,
+  path: string,
   ...pathSegments: string[]
 ): DocumentReference<AppModelType, DbModelType>;
 /**
