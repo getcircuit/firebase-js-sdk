@@ -179,6 +179,20 @@ abstract class BasePath<B extends BasePath<B>> {
    * (e.g., "__id123__") in numeric ascending order, followed by string
    * segments in lexicographical order.
    */
+  /**
+   * Returns whether any segment is a numeric ID (such as `__id5__`). Numeric
+   * IDs compare by value, so two paths can be equal while their segment
+   * strings differ, and malformed ones make comparisons throw.
+   */
+  hasNumericIdSegment(): boolean {
+    for (let i = 0; i < this.length; i++) {
+      if (BasePath.isNumericId(this.get(i))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static comparator<T extends BasePath<T>>(
     p1: BasePath<T>,
     p2: BasePath<T>

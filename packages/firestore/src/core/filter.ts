@@ -415,29 +415,82 @@ export class KeyFieldFilter extends FieldFilter {
 
 /** Filter that matches on key fields within an array. */
 export class KeyFieldInFilter extends FieldFilter {
-  private readonly keys: DocumentKey[];
+  private readonly keys: DocumentKeyList;
 
   constructor(field: FieldPath, value: ProtoValue) {
     super(field, Operator.IN, value);
-    this.keys = extractDocumentKeysFromArrayValue(Operator.IN, value);
+    this.keys = new DocumentKeyList(
+      extractDocumentKeysFromArrayValue(Operator.IN, value)
+    );
   }
 
   matches(doc: Document): boolean {
-    return this.keys.some(key => key.isEqual(doc.key));
+    return this.keys.has(doc.key);
   }
 }
 
 /** Filter that matches on key fields not present within an array. */
 export class KeyFieldNotInFilter extends FieldFilter {
-  private readonly keys: DocumentKey[];
+  private readonly keys: DocumentKeyList;
 
   constructor(field: FieldPath, value: ProtoValue) {
     super(field, Operator.NOT_IN, value);
-    this.keys = extractDocumentKeysFromArrayValue(Operator.NOT_IN, value);
+    this.keys = new DocumentKeyList(
+      extractDocumentKeysFromArrayValue(Operator.NOT_IN, value)
+    );
   }
 
   matches(doc: Document): boolean {
-    return !this.keys.some(key => key.isEqual(doc.key));
+    return !this.keys.has(doc.key);
+  }
+}
+
+/**
+ * Whether a key can only be matched by scanning: an empty path has no document
+ * id, and numeric ID segments compare by value or throw.
+ */
+function keyNeedsScan(key: DocumentKey): boolean {
+  return key.path.isEmpty() || key.path.hasNumericIdSegment();
+}
+
+/**
+ * A fixed list of document keys that answers whether it contains a key.
+ *
+ * Keys are grouped by document id, so a lookup compares only the keys with the
+ * looked-up id, using `DocumentKey.isEqual` as a plain scan would. Numeric ids
+ * such as `__id5__` compare by value, so equal keys can have different id
+ * strings, and malformed ones make the comparison throw. When the looked-up key
+ * or any listed key has a segment of that form, or an empty path with no id,
+ * every key is scanned in order, so results and errors match a plain scan.
+ */
+class DocumentKeyList {
+  private readonly keysById = new Map<string, DocumentKey[]>();
+  private readonly needsScan: boolean;
+
+  constructor(private readonly keys: DocumentKey[]) {
+    this.needsScan = keys.some(key => keyNeedsScan(key));
+    if (this.needsScan) {
+      return;
+    }
+    for (const key of keys) {
+      const id = key.path.lastSegment();
+      const keysWithId = this.keysById.get(id);
+      if (keysWithId) {
+        keysWithId.push(key);
+      } else {
+        this.keysById.set(id, [key]);
+      }
+    }
+  }
+
+  has(key: DocumentKey): boolean {
+    if (this.needsScan || keyNeedsScan(key)) {
+      return this.keys.some(listed => listed.isEqual(key));
+    }
+    const keysWithId = this.keysById.get(key.path.lastSegment());
+    return (
+      keysWithId !== undefined && keysWithId.some(listed => listed.isEqual(key))
+    );
   }
 }
 
