@@ -76,6 +76,7 @@ export interface Equatable<T> {
 
 /** Compare strings in UTF-8 encoded byte order */
 export function compareUtf8Strings(left: string, right: string): number {
+  // Spoke patch (small-fixes): no upstream issue; to offer as a pull request, see spoke-patch/upstream/README.md.
   // Equal strings are common (lookups of an existing key compare equal path
   // segments), so answer them without walking every character.
   if (left === right) {

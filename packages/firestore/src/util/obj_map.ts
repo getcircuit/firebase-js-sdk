@@ -52,6 +52,7 @@ export class ObjectMap<KeyType, ValueType> {
       return undefined;
     }
     for (const [otherKey, value] of matches) {
+      // Spoke patch (small-fixes): no upstream issue; to offer as a pull request, see spoke-patch/upstream/README.md.
       if (otherKey === key || this.equalsFn(otherKey, key)) {
         return value;
       }

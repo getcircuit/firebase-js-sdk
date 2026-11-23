@@ -183,6 +183,8 @@ abstract class BasePath<B extends BasePath<B>> {
    * Returns whether any segment is a numeric ID (such as `__id5__`). Numeric
    * IDs compare by value, so two paths can be equal while their segment
    * strings differ, and malformed ones make comparisons throw.
+   *
+   * Spoke patch (key-filter-scan, limbo-walk): see spoke-patch/upstream/README.md.
    */
   hasNumericIdSegment(): boolean {
     for (let i = 0; i < this.length; i++) {

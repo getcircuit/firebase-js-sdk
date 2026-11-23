@@ -2,14 +2,16 @@
 
 Where each change on `spoke` stands upstream, and the issue to open when there is none. Searched firebase/firebase-js-sdk issues and pull requests on 2026-11-23 for: updateLimboDocuments, limbo incrementally, limbo performance many listeners, onSnapshot performance, onSnapshot CPU many listeners, KeyFieldInFilter, documentId in performance, compareUtf8Strings performance, ensureDocumentUpdateByTarget, computeDocChanges performance, ObjectMap canonifyQuery performance.
 
-| Change | Commit | Upstream | Next step |
-| --- | --- | --- | --- |
-| Incremental limbo update (1) and path skip (6) | [ba285eb](https://github.com/getcircuit/firebase-js-sdk/commit/ba285eb) | None found. The code carries `TODO(klimt): Do this incrementally`. Related but different, both closed: [#2668](https://github.com/firebase/firebase-js-sdk/issues/2668) (`SortedSet.unionWith`, fixed in 2020) and [#6578](https://github.com/firebase/firebase-js-sdk/issues/6578) (closed as stale). | TODO: open [limbo-walk](issues/limbo-walk.md), then offer the commit as a pull request. |
-| Indexed `documentId()` in / not-in filters (5) | [706ab39](https://github.com/getcircuit/firebase-js-sdk/commit/706ab39) | None found. | TODO: open [key-filter-scan](issues/key-filter-scan.md). |
-| Pending update lookup (2), equal-string compare (3), `ObjectMap` identity (4) | [d532fb9](https://github.com/getcircuit/firebase-js-sdk/commit/d532fb9), [e133b5b](https://github.com/getcircuit/firebase-js-sdk/commit/e133b5b), [1510bd5](https://github.com/getcircuit/firebase-js-sdk/commit/1510bd5) | None found. | TODO: offer as one small pull request after the limbo-walk issue, citing it; too small for issues of their own. |
-| `doc(collectionReference, path)` types (7) | [3a7e86f](https://github.com/getcircuit/firebase-js-sdk/commit/3a7e86f) | Open: [#7826](https://github.com/firebase/firebase-js-sdk/issues/7826). | TODO: comment on #7826 with the overload split and offer a pull request. |
+| Change | Marker | Commit | Upstream | Next step |
+| --- | --- | --- | --- | --- |
+| Incremental limbo update (1) and path skip (6) | `limbo-walk` | [ba285eb](https://github.com/getcircuit/firebase-js-sdk/commit/ba285eb) | None found. The code carries `TODO(klimt): Do this incrementally`. Related but different, both closed: [#2668](https://github.com/firebase/firebase-js-sdk/issues/2668) (`SortedSet.unionWith`, fixed in 2020) and [#6578](https://github.com/firebase/firebase-js-sdk/issues/6578) (closed as stale). | TODO: open [limbo-walk](issues/limbo-walk.md), then offer the commit as a pull request. |
+| Indexed `documentId()` in / not-in filters (5) | `key-filter-scan` | [706ab39](https://github.com/getcircuit/firebase-js-sdk/commit/706ab39) | None found. | TODO: open [key-filter-scan](issues/key-filter-scan.md). |
+| Pending update lookup (2), equal-string compare (3), `ObjectMap` identity (4) | `small-fixes` | [d532fb9](https://github.com/getcircuit/firebase-js-sdk/commit/d532fb9), [e133b5b](https://github.com/getcircuit/firebase-js-sdk/commit/e133b5b), [1510bd5](https://github.com/getcircuit/firebase-js-sdk/commit/1510bd5) | None found. | TODO: offer as one small pull request after the limbo-walk issue, citing it; too small for issues of their own. |
+| `doc(collectionReference, path)` types (7) | `doc-overloads` | [3a7e86f](https://github.com/getcircuit/firebase-js-sdk/commit/3a7e86f) | Open: [#7826](https://github.com/firebase/firebase-js-sdk/issues/7826). | TODO: comment on #7826 with the overload split and offer a pull request. |
 
-Update this table in the same commit as any change, and replace a TODO with the link once the issue or pull request exists.
+Every site a change touches in `packages/firestore/src` carries a comment `Spoke patch (<marker>): <upstream link, or where the draft is>`. `git grep -n "Spoke patch ("` lists them all, so at an upgrade you can recheck each one against the upstream issue, update it, or remove it once upstream ships the fix.
+
+Update this table and the markers in the same commit as any change. When an issue or pull request is opened, replace the TODO here and the draft path in every marker with its link.
 
 ## Issue drafts
 

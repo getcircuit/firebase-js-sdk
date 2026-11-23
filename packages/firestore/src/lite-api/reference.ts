@@ -594,6 +594,8 @@ export function doc(
  *
  * @param reference - A reference to a collection.
  * @returns The `DocumentReference` instance.
+ *
+ * Spoke patch (doc-overloads): https://github.com/firebase/firebase-js-sdk/issues/7826.
  */
 export function doc<AppModelType, DbModelType extends DocumentData>(
   reference: CollectionReference<AppModelType, DbModelType>
@@ -612,6 +614,8 @@ export function doc<AppModelType, DbModelType extends DocumentData>(
  * @throws If the final path has an odd number of segments and does not point to
  * a document.
  * @returns The `DocumentReference` instance.
+ *
+ * Spoke patch (doc-overloads): https://github.com/firebase/firebase-js-sdk/issues/7826.
  */
 export function doc<AppModelType, DbModelType extends DocumentData>(
   reference: CollectionReference<AppModelType, DbModelType>,

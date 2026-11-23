@@ -670,6 +670,7 @@ export class WatchChangeAggregator {
             : targetData.target.path;
           const key = new DocumentKey(path);
           if (
+            // Spoke patch (small-fixes): no upstream issue; to offer as a pull request, see spoke-patch/upstream/README.md.
             !this.pendingDocumentUpdatesByTarget.get(key)?.has(targetId) &&
             !this.targetContainsDocument(targetId, key)
           ) {

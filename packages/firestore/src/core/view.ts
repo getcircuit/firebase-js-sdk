@@ -97,6 +97,8 @@ export class View {
    * synced keys. It is set when a call skips the limbo update or replaces the
    * synced keys, and the next limbo update then checks every document instead
    * of only the keys that call changed.
+   *
+   * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
    */
   private limboDocumentsNeedFullCheck = true;
   /**
@@ -104,6 +106,8 @@ export class View {
    * segment. Numeric IDs compare by value, so one key can be spelled several
    * ways (__id5__, __id05__), and malformed ones make comparisons throw. Such
    * views always check every document for limbo, exactly as a full walk does.
+   *
+   * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
    */
   private hasHeldNumericIdKeys: boolean;
   /** Document Keys that have local changes */
@@ -164,6 +168,7 @@ export class View {
     );
 
     docChanges.inorderTraversal((key, entry) => {
+      // Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
       if (entry.key !== key && key.toString() !== entry.key.toString()) {
         // The document set lookup uses the map key and the query match uses
         // the document's key. When they are spelled differently, this call's
@@ -405,6 +410,7 @@ export class View {
       !docChanges.needsRefill,
       'Cannot apply changes that need a refill'
     );
+    // Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
     // The limbo documents count as unchecked until this call has updated them,
     // so a call that throws or skips the update leaves the next one to check
     // every document.
@@ -551,6 +557,8 @@ export class View {
    *        Otherwise every document is checked.
    * @param changes - This call's document changes.
    * @param targetChange - This call's target change, if any.
+   *
+   * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
    */
   private updateLimboDocuments(
     checkChangedKeysOnly: boolean,
@@ -664,6 +672,8 @@ export class View {
  * Returns whether any document or target key in one call's changes has a
  * numeric ID segment. Reads keys without comparing them, since comparing a
  * malformed numeric ID throws.
+ *
+ * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
  */
 function changesHaveNumericIdSegment(
   changes: DocumentViewChange[],
@@ -677,7 +687,11 @@ function changesHaveNumericIdSegment(
   );
 }
 
-/** Returns whether any key in a set has a numeric ID segment. */
+/**
+ * Returns whether any key in a set has a numeric ID segment.
+ *
+ * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
+ */
 function keySetHasNumericIdSegment(keys: DocumentKeySet): boolean {
   let found = false;
   keys.forEachWhile(key => {

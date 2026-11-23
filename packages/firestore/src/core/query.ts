@@ -467,6 +467,8 @@ function queryMatchesPathAndCollectionGroup(
 /**
  * Returns whether a key's path is in the query's collection, collection group
  * or document. A document whose key fails it can never match the query.
+ *
+ * Spoke patch (limbo-walk): no upstream issue yet; draft in spoke-patch/upstream/issues/limbo-walk.md.
  */
 export function queryMatchesKeyPath(query: Query, key: DocumentKey): boolean {
   const docPath = key.path;

@@ -448,6 +448,8 @@ export class KeyFieldNotInFilter extends FieldFilter {
 /**
  * Whether a key can only be matched by scanning: an empty path has no document
  * id, and numeric ID segments compare by value or throw.
+ *
+ * Spoke patch (key-filter-scan): no upstream issue yet; draft in spoke-patch/upstream/issues/key-filter-scan.md.
  */
 function keyNeedsScan(key: DocumentKey): boolean {
   return key.path.isEmpty() || key.path.hasNumericIdSegment();
@@ -462,6 +464,8 @@ function keyNeedsScan(key: DocumentKey): boolean {
  * strings, and malformed ones make the comparison throw. When the looked-up key
  * or any listed key has a segment of that form, or an empty path with no id,
  * every key is scanned in order, so results and errors match a plain scan.
+ *
+ * Spoke patch (key-filter-scan): no upstream issue yet; draft in spoke-patch/upstream/issues/key-filter-scan.md.
  */
 class DocumentKeyList {
   private readonly keysById = new Map<string, DocumentKey[]>();
