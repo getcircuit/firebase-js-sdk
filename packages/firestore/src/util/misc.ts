@@ -76,6 +76,11 @@ export interface Equatable<T> {
 
 /** Compare strings in UTF-8 encoded byte order */
 export function compareUtf8Strings(left: string, right: string): number {
+  // Equal strings are common (lookups of an existing key compare equal path
+  // segments), so answer them without walking every character.
+  if (left === right) {
+    return 0;
+  }
   // Find the first differing character (a.k.a. "UTF-16 code unit") in the two strings and,
   // if found, use that character to determine the relative ordering of the two strings as a
   // whole. Comparing UTF-16 strings in UTF-8 byte order can be done simply and efficiently by
