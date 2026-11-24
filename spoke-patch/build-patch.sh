@@ -56,9 +56,9 @@ PUBLISHED=$WORK/npm/package/dist
 
 echo "Preparing a checkout of $BASE"
 git -C "$ROOT" worktree add --detach "$WORK/base" "$BASE" >/dev/null 2>&1
-# The base build needs this branch's rollup.shared.js, which loads and saves the name cache.
+# The base build needs this branch's rollup.shared.cjs, which loads and saves the name cache.
 # With NC_IN and NC_OUT unset it builds exactly what upstream's does.
-git -C "$WORK/base" checkout "$COMMIT" -- packages/firestore/rollup.shared.js
+git -C "$WORK/base" checkout "$COMMIT" -- packages/firestore/rollup.shared.cjs
 ln -s "$ROOT/node_modules" "$WORK/base/node_modules"
 [ -d "$PKG/node_modules" ] && ln -s "$PKG/node_modules" "$WORK/base/packages/firestore/node_modules"
 for dist in "$ROOT"/packages/*/dist; do

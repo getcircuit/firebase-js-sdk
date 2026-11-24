@@ -45,7 +45,7 @@ Upstream `main` is ahead of any release, so `spoke` only ever takes in release t
 ## What lives here
 
 - Our changes in `packages/firestore/src`, with their tests under `packages/firestore/test/unit/core/` and `test/unit/api/`.
-- `packages/firestore/rollup.shared.js` can load and save terser's name cache (`NC_IN`, `NC_OUT`). With both unset it builds exactly what upstream builds.
+- `packages/firestore/rollup.shared.cjs` can load and save terser's name cache (`NC_IN`, `NC_OUT`). With both unset it builds exactly what upstream builds.
 - `spoke-patch/build-patch.sh` builds the Yarn patch, and `compare-build.mjs` compares a build with the published package.
 - `.github/workflows/spoke.yml` checks every pull request into `spoke` and every push to it, and uploads the built patch.
 - `spoke-patch/upstream/` tracks where each change stands upstream, with ready-to-paste issue drafts in `upstream/issues/`.
