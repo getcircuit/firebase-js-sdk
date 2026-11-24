@@ -9,7 +9,7 @@
  * dist/*.d.ts and dist/lite/*.d.ts that the package's api-report scripts write;
  * consumers read those, not the per-module declarations under dist/firestore/.
  * Shared chunks are
- * named after a hash of their contents (common-456515ba.esm.js), and the files
+ * named after a hash of their contents (common-B30b72EX.esm.js), and the files
  * that import them name them too, so the comparison first maps each built chunk
  * name to the published one by matching the imports of files with the same name.
  *
@@ -36,8 +36,10 @@ function walk(dir) {
 const isMainBundle = f =>
   /\.(m?js)$/.test(f) && !f.startsWith('lite/') && !f.startsWith('intermediate/lite/');
 const isTypeRollup = f => /^(lite\/)?[^/]+\.d\.ts$/.test(f);
-const chunkName = /common-([0-9a-f]{8})\./;
-const chunkHashes = text => [...text.matchAll(/common-([0-9a-f]{8})\./g)].map(m => m[1]);
+// Rollup names chunks with 8 characters of a content hash: hex in older releases
+// (common-456515ba), base64url since firebase@12.19.0 (common-B30b72EX).
+const chunkName = /common-([0-9A-Za-z_-]{8})\./;
+const chunkHashes = text => [...text.matchAll(/common-([0-9A-Za-z_-]{8})\./g)].map(m => m[1]);
 const read = f => fs.readFileSync(f, 'utf8');
 
 const files = walk(published).filter(f => isMainBundle(f) || isTypeRollup(f));
