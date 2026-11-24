@@ -76,6 +76,12 @@ async function runTests(config: TestConfig) {
     }
 
     lernaCmd.push(testCommand);
+    lernaCmd.push('--no-bail');
+
+    if (argv.concurrency) {
+      lernaCmd.push('--concurrency', String(argv.concurrency));
+    }
+
     await spawn('npx', lernaCmd, { stdio: 'inherit', cwd: root });
     process.exit(0);
   } catch (e) {

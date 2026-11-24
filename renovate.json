@@ -11,9 +11,7 @@
     }
   ],
   "ignoreDeps": [
-    "protractor",
     "long",
-    "rollup-plugin-copy-assets",
     "typedoc",
     "@microsoft/tsdoc",
     "idb",

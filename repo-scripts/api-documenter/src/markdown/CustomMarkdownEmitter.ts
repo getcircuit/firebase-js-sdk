@@ -18,14 +18,15 @@
 // Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
 // See LICENSE in the project root for license information.
 
-import colors from 'colors';
+import { yellow } from '../utils/style';
 
 import { DocNode, DocLinkTag, StringBuilder } from '@microsoft/tsdoc';
 import {
   ApiModel,
   IResolveDeclarationReferenceResult,
   ApiItem
-} from 'api-extractor-model-me';
+} from '@microsoft/api-extractor-model';
+import { resolveDeclarationReferenceWithAliases } from '../documenters/MarkdownDocumenterHelpers';
 
 import { CustomDocNodeKind } from '../nodes/CustomDocNodeKind';
 import { DocHeading } from '../nodes/DocHeading';
@@ -192,7 +193,8 @@ export class CustomMarkdownEmitter extends MarkdownEmitter {
     const options: ICustomMarkdownEmitterOptions = context.options;
 
     const result: IResolveDeclarationReferenceResult =
-      this._apiModel.resolveDeclarationReference(
+      resolveDeclarationReferenceWithAliases(
+        this._apiModel,
         docLinkTag.codeDestination!,
         options.contextApiItem
       );
@@ -216,13 +218,32 @@ export class CustomMarkdownEmitter extends MarkdownEmitter {
           context.writer.write('[');
           context.writer.write(encodedLinkText);
           context.writer.write(`](${filename!})`);
+          return;
         } else {
-          console.log(colors.yellow('WARNING: Unable to determine link text'));
+          console.log(yellow('WARNING: Unable to determine link text'));
         }
       }
+    }
+
+    // Fallback: Never silently drop unresolved link text
+    let fallbackText: string = docLinkTag.linkText || '';
+    if (!fallbackText && docLinkTag.codeDestination) {
+      const memberRefs = docLinkTag.codeDestination.memberReferences;
+      if (memberRefs && memberRefs.length > 0) {
+        const lastMember = memberRefs[memberRefs.length - 1];
+        if (lastMember.memberIdentifier) {
+          fallbackText = lastMember.memberIdentifier.identifier;
+        }
+      }
+      if (!fallbackText) {
+        fallbackText = docLinkTag.codeDestination.emitAsTsdoc();
+      }
+    }
+    if (fallbackText) {
+      context.writer.write(this.getEscapedText(fallbackText));
     } else if (result.errorMessage) {
       console.log(
-        colors.yellow(
+        yellow(
           `WARNING: Unable to resolve reference "${docLinkTag.codeDestination!.emitAsTsdoc()}": ` +
             result.errorMessage
         )

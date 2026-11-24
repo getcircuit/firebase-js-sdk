@@ -20,3 +20,15 @@ This fork exists to ship performance and type fixes to `@firebase/firestore` bef
 - Patch tooling: `spoke-patch/build-patch.sh`, `compare-build.mjs`.
 - Patch documentation: `spoke-patch/patch-header.txt`, which the build puts under a banner naming the source commit.
 - Upstream status per change: `spoke-patch/upstream/README.md`; issue drafts in `spoke-patch/upstream/issues/`.
+
+## Upstream notes
+
+Upstream firebase-js-sdk added these instructions for its own repository in 12.19.0. For the checks a change here needs, follow `spoke-patch/README.md`.
+
+### Testing instructions
+- Before testing, create a `config/project.json` file. Copy `config/ci.config.json` if another project config is not specified by the user.
+- This is a web SDK and is most commonly used in a browser environment, so if you are running unit tests, you must run browser unit tests, not just Node tests, even if the Node tests seem like they would be faster.
+
+### Preparing code for PRs
+- Run `yarn format` after any changes to `*.ts` or `*.js` files, to do a formatting and license pass.
+- Run `yarn docgen:all` after any changes that affect the public API or that change the text of comments that are the source of public documentation

@@ -491,7 +491,10 @@ export class ServerTimestampFieldValueImpl extends FieldValue {
 }
 
 export class ArrayUnionFieldValueImpl extends FieldValue {
-  constructor(methodName: string, private readonly _elements: unknown[]) {
+  constructor(
+    methodName: string,
+    private readonly _elements: unknown[]
+  ) {
     super(methodName);
   }
 
@@ -501,8 +504,8 @@ export class ArrayUnionFieldValueImpl extends FieldValue {
       context,
       /*array=*/ true
     );
-    const parsedElements = this._elements.map(
-      element => parseData(element, parseContext)!
+    const parsedElements = this._elements.map(element =>
+      parseData(element, parseContext)!
     );
     const arrayUnion = new ArrayUnionTransformOperation(parsedElements);
     return new FieldTransform(context.path!, arrayUnion);
@@ -517,7 +520,10 @@ export class ArrayUnionFieldValueImpl extends FieldValue {
 }
 
 export class ArrayRemoveFieldValueImpl extends FieldValue {
-  constructor(methodName: string, private readonly _elements: unknown[]) {
+  constructor(
+    methodName: string,
+    private readonly _elements: unknown[]
+  ) {
     super(methodName);
   }
 
@@ -527,8 +533,8 @@ export class ArrayRemoveFieldValueImpl extends FieldValue {
       context,
       /*array=*/ true
     );
-    const parsedElements = this._elements.map(
-      element => parseData(element, parseContext)!
+    const parsedElements = this._elements.map(element =>
+      parseData(element, parseContext)!
     );
     const arrayUnion = new ArrayRemoveTransformOperation(parsedElements);
     return new FieldTransform(context.path!, arrayUnion);
@@ -543,7 +549,10 @@ export class ArrayRemoveFieldValueImpl extends FieldValue {
 }
 
 export class NumericIncrementFieldValueImpl extends FieldValue {
-  constructor(methodName: string, private readonly _operand: number) {
+  constructor(
+    methodName: string,
+    private readonly _operand: number
+  ) {
     super(methodName);
   }
 
@@ -565,7 +574,10 @@ export class NumericIncrementFieldValueImpl extends FieldValue {
 }
 
 export class NumericMinimumFieldValueImpl extends FieldValue {
-  constructor(methodName: string, private readonly _operand: number) {
+  constructor(
+    methodName: string,
+    private readonly _operand: number
+  ) {
     super(methodName);
   }
 
@@ -587,7 +599,10 @@ export class NumericMinimumFieldValueImpl extends FieldValue {
 }
 
 export class NumericMaximumFieldValueImpl extends FieldValue {
-  constructor(methodName: string, private readonly _operand: number) {
+  constructor(
+    methodName: string,
+    private readonly _operand: number
+  ) {
     super(methodName);
   }
 
@@ -907,6 +922,18 @@ export function parseScalarValue(
     return {
       timestampValue: toTimestamp(context.serializer, timestamp)
     };
+  } else if (isTemporalInstant(value)) {
+    const timestamp = Timestamp.fromInstant(value);
+    // Firestore backend truncates precision down to microseconds. To ensure
+    // offline mode works the same with regards to truncation, perform the
+    // truncation immediately without waiting for the backend to do that.
+    const truncatedTimestamp = new Timestamp(
+      timestamp.seconds,
+      Math.floor(timestamp.nanoseconds / 1000) * 1000
+    );
+    return {
+      timestampValue: toTimestamp(context.serializer, truncatedTimestamp)
+    };
   } else if (value instanceof GeoPoint) {
     return {
       geoPointValue: {
@@ -941,6 +968,34 @@ export function parseScalarValue(
       `Unsupported field value: ${valueDescription(value)}`
     );
   }
+}
+
+/**
+ * Checks if the given value is an instance of `Temporal.Instant`.
+ * Checks both `instanceof` against runtime `Temporal.Instant` (if available)
+ * and duck typing via `[Symbol.toStringTag]` and `epochNanoseconds` bigint property
+ * to support polyfills or cross-realm instances.
+ */
+function isTemporalInstant(value: unknown): value is Temporal.Instant {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  if (
+    typeof Temporal !== 'undefined' &&
+    typeof (Temporal as Record<string, unknown>).Instant === 'function'
+  ) {
+    const instantCtor = (Temporal as Record<string, unknown>).Instant as new (
+      ...args: unknown[]
+    ) => unknown;
+    if (value instanceof instantCtor) {
+      return true;
+    }
+  }
+  const instant = value as Partial<Temporal.Instant>;
+  return (
+    instant[Symbol.toStringTag] === 'Temporal.Instant' &&
+    typeof instant.epochNanoseconds === 'bigint'
+  );
 }
 
 /**
@@ -994,6 +1049,7 @@ export function looksLikeJsonObject(input: unknown): boolean {
     !(input instanceof DocumentReference) &&
     !(input instanceof FieldValue) &&
     !(input instanceof VectorValue) &&
+    !isTemporalInstant(input) &&
     !isProtoValueSerializable(input)
   );
 }
