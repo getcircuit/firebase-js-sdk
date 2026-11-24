@@ -36,7 +36,8 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
         with:
-          node-version: 22.10.0
+          # Upstream's own CI version for this release.
+          node-version: 22.23.2
       - name: Install
         run: yarn
       - name: Build Firestore's dependencies
@@ -49,26 +50,32 @@ jobs:
         # This also runs doc_overloads.test.ts's compile-time check.
         working-directory: packages/firestore
         run: npx tsc --noEmit -p tsconfig.json
-      # Both test steps skip the LRU tests named "skips a cache that is too small",
-      # which fail on the upstream release tag too (firebase@12.15.0, node).
+      # Both test steps compile through ts-node: Babel 8, which the release uses,
+      # fails to load its own plugins under mocha ("template is not a function").
+      # Both skip the LRU tests named "skips a cache that is too small", which
+      # fail on the firebase@12.15.0 release tag too.
       - name: Unit and spec tests, in memory
         working-directory: packages/firestore
         env:
-          NO_TS_NODE: 'true'
           TEST_PLATFORM: node
+          NODE_OPTIONS: --no-experimental-strip-types
+          TS_NODE_COMPILER_OPTIONS: '{"module":"commonjs"}'
+          TS_NODE_TRANSPILE_ONLY: 'true'
         run: >-
-          ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts
+          ../../node_modules/.bin/mocha --require ts-node/register --require ./test/register.ts
           --config ../../config/mocharc.node.js --grep 'skips a cache that is too small' --invert
           'test/unit/model/*.test.ts' 'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
       - name: Spec and local tests, with IndexedDB persistence
         working-directory: packages/firestore
         env:
-          NO_TS_NODE: 'true'
           TEST_PLATFORM: node
           USE_MOCK_PERSISTENCE: 'YES'
+          NODE_OPTIONS: --no-experimental-strip-types
+          TS_NODE_COMPILER_OPTIONS: '{"module":"commonjs"}'
+          TS_NODE_TRANSPILE_ONLY: 'true'
         run: >-
-          ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts
-          --require test/util/node_persistence.ts --config ../../config/mocharc.node.js
+          ../../node_modules/.bin/mocha --require ts-node/register --require ./test/register.ts
+          --require ./test/util/node_persistence.ts --config ../../config/mocharc.node.js
           --grep 'skips a cache that is too small' --invert
           'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
       - name: Build the patch

@@ -56,20 +56,23 @@ From the repository root, after `yarn` and `yarn --cwd packages/firestore build:
 
 ```bash
 cd packages/firestore
-NO_TS_NODE=true TEST_PLATFORM=node NODE_OPTIONS=--no-experimental-strip-types \
-  ../../node_modules/.bin/mocha --require babel-register.js --require test/register.ts \
+TEST_PLATFORM=node NODE_OPTIONS=--no-experimental-strip-types \
+  TS_NODE_COMPILER_OPTIONS='{"module":"commonjs"}' TS_NODE_TRANSPILE_ONLY=true \
+  ../../node_modules/.bin/mocha --require ts-node/register --require ./test/register.ts \
   --config ../../config/mocharc.node.js \
-  'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
+  'test/unit/model/*.test.ts' 'test/unit/core/*.test.ts' 'test/unit/remote/*.test.ts' 'test/unit/specs/*.test.ts' 'test/unit/local/*.test.ts'
 ```
 
 Type-check with `npx tsc --noEmit -p tsconfig.json` from `packages/firestore`; that is what runs `doc_overloads.test.ts`'s check. Errors about `gapi` under `../auth` are upstream's and unrelated.
 
-Add `USE_MOCK_PERSISTENCE=YES` and `--require test/util/node_persistence.ts` to run the spec and local tests with IndexedDB persistence. Compare any failure with a run on the release tag: a test that fails there too is not ours. At `firebase@12.15.0`, two LRU tests named "skips a cache that is too small" fail on the tag.
+The tests compile through ts-node because upstream's Babel 8 setup fails to load its own plugins under mocha ("template is not a function"). `build:deps` rewrites `common/api-review/`; run `git checkout -- common/api-review` before `build-patch.sh`, which needs a clean tree.
+
+Add `USE_MOCK_PERSISTENCE=YES` and `--require ./test/util/node_persistence.ts` to run the spec and local tests with IndexedDB persistence. That needs sqlite3's native binary; if it is missing, run `npx prebuild-install -r napi` in `node_modules/sqlite3`. Compare any failure with a run on the release tag: a test that fails there too is not ours. The LRU tests named "skips a cache that is too small" fail on the `firebase@12.15.0` tag, and still fail after the `firebase@12.19.0` merge.
 
 ## Build the patch
 
 ```bash
-spoke-patch/build-patch.sh firebase@12.15.0 /tmp/firestore.patch [existing.patch ...]
+spoke-patch/build-patch.sh firebase@12.19.0 /tmp/firestore.patch [existing.patch ...]
 ```
 
 The script downloads the published package, builds the release tag and stops unless every main bundle matches the published one byte for byte. Then it builds `spoke` and writes the difference with `patch-header.txt` on top, filling in the Firestore version (from `packages/firestore/package.json`) and the release. Copy the output over the patch file in the consuming repository (for Yarn, `.yarn/patches/@firebase-firestore-npm-<version>-<hash>.patch`) and run `yarn install`. Never edit the patch by hand: change `spoke` and build it again.
