@@ -111,9 +111,13 @@
 #   four more queries over the same documents +27.5 -> +2.2 MiB, their first
 #   (cached) snapshot 54-66 -> 15-19 ms. Remote updates, offline writes and acks
 #   take the same time, and every listener matches a server read at the end.
+#   On the live page above (a 4.16.0 build with the same code; three pairs of runs,
+#   alternating which build goes first), the JS heap after a forced GC 240 s after
+#   load fell 1,087 -> 1,010, 1,295 -> 1,122 and 1,324 -> 1,246 MB (6-13% less).
+#   Time to first publish and long-task share stayed within run-to-run noise.
 #
-# Files: the main build's bundles that change (the common-* chunks, index.rn.js,
-# whose local names shift, and intermediate/), and the type rollups that change
+# Files: the main build's bundles that change (the common-* chunks and
+# intermediate/), and the type rollups that change
 # (dist/*.d.ts, dist/lite/*.d.ts). The lite/ bundles are not rebuilt and stay as
 # published, and neither are the per-module declarations under dist/firestore/.
 #
