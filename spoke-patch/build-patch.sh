@@ -60,7 +60,14 @@ git -C "$ROOT" worktree add --detach "$WORK/base" "$BASE" >/dev/null 2>&1
 # With NC_IN and NC_OUT unset it builds exactly what upstream's does.
 git -C "$WORK/base" checkout "$COMMIT" -- packages/firestore/rollup.shared.cjs
 ln -s "$ROOT/node_modules" "$WORK/base/node_modules"
-[ -d "$PKG/node_modules" ] && ln -s "$PKG/node_modules" "$WORK/base/packages/firestore/node_modules"
+# Workspaces keep dependencies that differ from the root's in their own node_modules. The
+# type rollups depend on one: repo-scripts/prune-dts formats them with its own prettier
+# (2.8.8), and the root's (3.x) formats some union types differently.
+for modules in "$ROOT"/packages/*/node_modules "$ROOT"/repo-scripts/*/node_modules; do
+  workspace=${modules%/node_modules}
+  target=$WORK/base/${workspace#"$ROOT"/}
+  if [ -d "$target" ]; then ln -s "$modules" "$target/node_modules"; fi
+done
 for dist in "$ROOT"/packages/*/dist; do
   name=$(basename "$(dirname "$dist")")
   [ "$name" = firestore ] || ln -sfn "$dist" "$WORK/base/packages/$name/dist"
