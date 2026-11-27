@@ -1,6 +1,7 @@
 # Makes @firebase/firestore {{FIRESTORE_VERSION}} (firebase {{FIREBASE_VERSION}}) do work per server update in
-# proportion to what changed, not to everything the client holds live, and keep one
-# copy of a document's fields where it kept one per cache entry and per view.
+# proportion to what changed, not to everything the client holds live, keep one
+# copy of a document's fields where it kept one per cache entry and per view, and
+# build each reference's path string once instead of on every read.
 #
 # Why: on every server update (remote event), local write, ack or bundle load, the
 # client revisits every listener's view and some per-listener state. A page holding

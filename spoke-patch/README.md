@@ -1,6 +1,6 @@
 # Firestore performance patch
 
-The `spoke` branch of this fork carries changes to `@firebase/firestore` that Spoke applies to the published package as a Yarn patch. With them, each server update costs work in proportion to what changed, instead of to every listener and document the client holds. `patch-header.txt` describes each change, how it was checked and what it measured.
+The `spoke` branch of this fork carries changes to `@firebase/firestore` that Spoke applies to the published package as a Yarn patch. With them, each server update costs work in proportion to what changed, instead of to every listener and document the client holds, and reading a reference's `.path` again returns the string built on the first read. `patch-header.txt` describes each change, how it was checked and what it measured.
 
 ## How it fits together
 
@@ -30,6 +30,7 @@ Every patch starts with a banner naming the branch, commit and base release it w
 | `view_review_cases` | Nine edge cases (malformed numeric ids, mismatched map entries, an update that throws midway) give the result recorded from the release's View |
 | `key_in_filter_fuzz` | The indexed `documentId() in` / `not-in` filters match a plain `isEqual` scan, errors included |
 | `doc_overloads` | `doc(collectionReference, undefined)` does not compile |
+| `path.test.ts` (path strings) | After a path's string is read, its child, `popLast()` and `popFirst()` still give their own strings, though they share its segment array |
 | `build-patch.sh` base build | The release built here is byte-identical to the published package, so the patch holds only our changes |
 
 One limit: the edge cases cover the odd states we know of. A new one in a later change shows up only if the limbo fuzz or a written case reaches it, so a change to `View` adds its own cases.
@@ -38,7 +39,7 @@ One limit: the edge cases cover the odd states we know of. A new one in a later 
 
 - `main` mirrors upstream `main`. Update it with GitHub's "Sync fork" and never commit to it.
 - `spoke` is the default branch: upstream's latest release we use, plus our changes. `git diff firebase@<version> spoke` shows exactly what we change.
-- `spoke-firestore-<version>` tags mark the commit each shipped patch was built from, eg. `spoke-firestore-4.16.0`. The patch header names its tag.
+- `spoke-firestore-<version>` tags mark the commit each shipped patch was built from, eg. `spoke-firestore-4.16.0`. A later patch for the same Firestore version adds a counter: `spoke-firestore-4.17.2-2`, then `-3`. Tags never move, so each shipped patch keeps its own. The patch banner names the commit.
 
 Upstream `main` is ahead of any release, so `spoke` only ever takes in release tags (`firebase@12.16.0`), never `main`. The patch has to apply to the package npm published, and `build-patch.sh` stops when the base build does not match it.
 
@@ -110,6 +111,6 @@ Upgrades follow the same path: the merge of the new release tag goes into `spoke
 3. Run the tests above. If a recorded result in `view_review_cases.test.ts` no longer holds, check what the new release's View does before updating it. Update `patch-header.txt` if a change or its evidence changed.
 4. Check each `Spoke patch (...)` marker against the upstream issue it names, and drop changes upstream now ships.
 5. Build the patch with the new tag, passing the consumer's existing patches for the new version if it has any, and replace it in the consuming repository.
-6. Once the consuming pull request merges, tag the commit its patch was built from, `spoke-firestore-<new firestore version>`, and push the tag.
+6. Once the consuming pull request merges, tag the commit its patch was built from, `spoke-firestore-<new firestore version>` (or the next counter, as under "Branches and tags"), and push the tag.
 
 To propose a change upstream, cut a branch from the release tag and cherry-pick or rewrite that change on it.
