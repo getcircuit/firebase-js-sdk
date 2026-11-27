@@ -44,7 +44,6 @@ import { isValidResourceName } from '../remote/serializer';
 import { fail, hardAssert } from '../util/assert';
 import { ByteString } from '../util/byte_string';
 import { logError } from '../util/log';
-import { forEach } from '../util/obj';
 
 import { GeoPoint } from './geo_point';
 import { Timestamp } from './timestamp';
@@ -109,10 +108,15 @@ export abstract class AbstractUserDataWriter {
     fields: ApiClientObjectMap<Value> | undefined,
     serverTimestampBehavior: ServerTimestampBehavior = 'none'
   ): DocumentData {
+    // Spoke patch (type-order): no upstream issue yet; draft in spoke-patch/upstream/issues/type-order.md.
+    // Keep this a plain loop: it runs for every field of every map data() and
+    // get() convert, and the shared forEach helper adds a callback per field.
     const result: DocumentData = {};
-    forEach(fields, (key, value) => {
-      result[key] = this.convertValue(value, serverTimestampBehavior);
-    });
+    for (const key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key)) {
+        result[key] = this.convertValue(fields[key], serverTimestampBehavior);
+      }
+    }
     return result;
   }
 

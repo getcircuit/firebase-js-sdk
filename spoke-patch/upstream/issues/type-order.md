@@ -1,0 +1,20 @@
+# typeOrder's `in` checks dominate data() and the memory LRU cache's size estimate
+
+**Problem.** `typeOrder()` in `model/values.ts` classifies a proto `Value` by testing `'nullValue' in value`, `'booleanValue' in value` and so on, up to ten checks before it reaches `mapValue`. Values of different kinds have different object shapes, so in a document with mixed field types these keyed lookups become megamorphic in V8, which runs them through its slowest generic lookup. The value walks built on it call `typeOrder()` once per value: `DocumentSnapshot.data()` and `get()` (`AbstractUserDataWriter.convertValue`), and `estimateByteSize`, which the default memory cache (`LruGcMemoryOfflineComponentProvider`) runs on every document it stores. A deoptimization trace shows no deopts in these functions; the cost is the megamorphic lookups alone. The two map walks also go through the `forEach(obj, fn)` helper, which calls a closure once per field and shares its call sites with every other `forEach` caller.
+
+**Repro sketch.**
+
+```js
+// 2,000 documents, each with an array of 30 maps holding strings, numbers,
+// timestamps, booleans, nulls and nested maps.
+const snap = await getDocsFromCache(query);
+for (const doc of snap.docs) {
+  doc.data();
+}
+```
+
+**Measured** in Node 24.18 on the built node bundle, 2,000 documents of 30 nested maps each loaded from a bundle, medians of 12 alternating runs: `data()` takes 36.2 µs per document, and `estimateByteSize` on the same documents 27.7 µs. With the change below, 16.6 µs and 8.2 µs (21.2 µs and 13.1 µs with the `typeOrder` change alone). `data()` output was byte-identical.
+
+**Proposed fix.** Read the value's keys instead of testing for each member. A `Value` sets exactly one member of its `value_type` oneof: WebChannel JSON, bundles and `UserDataReader` build objects with one key, and Node gRPC decodes with `oneofs: false` (protobufjs sets no defaults for oneof members, so a decoded value has one key too). So `typeOrder` loops over the value's keys with `for...in` and looks each one up in a single `switch` that lists every document-value member with its precedence and type order. A well-formed value takes one lookup. A value with several members gets the one with the lowest precedence, which is the order the `in` checks test them in today, so malformed values keep their result, and a value with none, or with only pipeline members, still fails. `for...in` lists inherited enumerable keys as `in` sees them. It does not see a non-enumerable property or a key that a Proxy hides; JSON, protobufjs and object literals never build either, and no SDK path passes a Proxy. When no member is found, a primitive (a malformed bundle can hold one) is tested with `in`, so it throws the same `TypeError` as today and the classifier's assertion never logs it. `for...in` walks a primitive string's characters first, so a very long malformed string takes longer to reject; testing for primitives before the loop avoids that but slowed every well-formed document in measurement. A `mapValue` still goes through the server timestamp, max value and vector checks. In `convertObjectMap` and `estimateMapByteSize`, loop over the fields with `for...in` and `hasOwnProperty` instead of calling `forEach`. A randomized test compares the new `typeOrder` with the current one on every value kind, malformed values and random combinations of members, errors included, and compares `data()` and `estimateByteSize` with copies of the current code on the same values and on random documents. Implementation and test: [#7](https://github.com/getcircuit/firebase-js-sdk/pull/7).
+
+`valueEquals` and `valueCompare` also call `typeOrder()`. When every compared value has the same shape, today's `in` checks stay specialized to it, and `for...in` adds a small setup cost: a cached query over 12,000 documents took 3-5% longer ordered by an integer field and 0-4% longer by a string field (two runs, medians of 6). `canonifyValue` has its own `in` chain and is not changed here.
