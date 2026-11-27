@@ -75,7 +75,15 @@
 #    still copies the fields at once; the SDK uses it where raw fields leave its
 #    control.
 #
-# Behavior: changes 1-6 and 8 return the same results, emit the same limbo changes in
+# 9. ResourcePath.canonicalString (DocumentReference.path, CollectionReference.path)
+#    Upstream copied and joined the path's segments on every call. Each path now
+#    keeps the string from its first call. Paths never change after construction,
+#    and the field is set in the BasePath constructor so every path has the same
+#    object shape. A reference whose path was read is no longer structurally
+#    equal to an equal one whose path was not: tests that compare references
+#    with toEqual or deep.equal should compare paths or use refEqual instead.
+#
+# Behavior: changes 1-6, 8 and 9 return the same results, emit the same limbo changes in
 # the same order and throw the same errors as upstream. Checked on the branch:
 # - Firestore's unit and spec suites, in memory and with mock IndexedDB
 #   persistence including multi-tab specs, give the same results as the release
@@ -96,6 +104,8 @@
 #   memory cache and LocalStore tests check that cache reads share fields, and that
 #   documents a remote event returned keep their fields through a later local write
 #   and its rejection.
+# - path.test.ts reads a path's string, then checks the strings of its child,
+#   popLast and popFirst, which share its segment array, and its own again.
 #
 # Measured with the same changes (emulator: a second client holding documents
 # live, CPU per update):
@@ -115,6 +125,12 @@
 #   alternating which build goes first), the JS heap after a forced GC 240 s after
 #   load fell 1,087 -> 1,010, 1,295 -> 1,122 and 1,324 -> 1,246 MB (6-13% less).
 #   Time to first publish and long-task share stayed within run-to-run noise.
+# - Change 9, Node, built node bundle: a repeated DocumentReference.path read
+#   at depth 2, 4 and 6 takes 38, 59 and 79 ns and 145-264 B, and 4 ns and 0 B
+#   with the stored string. First reads cost the same; each path is 8 B larger.
+#   Emulator, three alternating pairs, CPU ms per update: 10,000 document
+#   listeners 38.9-40.9 -> 35.3-39.5, 366 queries over 24,300 documents
+#   1.9-2.5 -> 1.4-1.6. Opening the listeners took the same time.
 #
 # Files: the main build's bundles that change (the common-* chunks and
 # intermediate/), and the type rollups that change

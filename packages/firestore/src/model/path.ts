@@ -32,6 +32,14 @@ abstract class BasePath<B extends BasePath<B>> {
   private segments: string[];
   private offset: number;
   private len: number;
+  /**
+   * The joined path string, filled by `ResourcePath.canonicalString()` on its
+   * first call. Paths never change after construction, so the string cannot
+   * go stale.
+   *
+   * Spoke patch (path-string-cache): see spoke-patch/upstream/issues/path-string-cache.md.
+   */
+  protected cachedCanonicalString: string | undefined;
 
   constructor(segments: string[], offset?: number, length?: number) {
     if (offset === undefined) {
@@ -54,6 +62,10 @@ abstract class BasePath<B extends BasePath<B>> {
     this.segments = segments;
     this.offset = offset;
     this.len = length;
+    // Set here even though it starts empty, so V8 sees one property layout for
+    // every path. Adding the field on first use would give paths two layouts,
+    // and V8 would throw away its optimized code for them.
+    this.cachedCanonicalString = undefined;
   }
 
   /**
@@ -260,7 +272,11 @@ export class ResourcePath extends BasePath<ResourcePath> {
     // sequences (e.g. __id123__) and just passes them through raw (they exist
     // for legacy reasons and should not be used frequently).
 
-    return this.toArray().join('/');
+    // Spoke patch (path-string-cache): see spoke-patch/upstream/issues/path-string-cache.md.
+    if (this.cachedCanonicalString === undefined) {
+      this.cachedCanonicalString = this.toArray().join('/');
+    }
+    return this.cachedCanonicalString;
   }
 
   toString(): string {

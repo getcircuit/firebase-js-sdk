@@ -161,6 +161,22 @@ describe('Path', () => {
     expect(abc.isPrefixOf(ba)).to.equal(false);
   });
 
+  it('gives paths derived from a read path their own strings', () => {
+    const path = new ResourcePath(['rooms', 'Eros', 'messages', 'm1']);
+    expect(path.canonicalString()).to.equal('rooms/Eros/messages/m1');
+
+    // popLast and popFirst share the segment array with the path they came from.
+    expect(path.child('reactions').canonicalString()).to.equal(
+      'rooms/Eros/messages/m1/reactions'
+    );
+    expect(path.popLast().canonicalString()).to.equal('rooms/Eros/messages');
+    expect(path.popFirst().canonicalString()).to.equal('Eros/messages/m1');
+    expect(path.popFirst(2).popLast().canonicalString()).to.equal('messages');
+    expect(path.canonicalString()).to.equal('rooms/Eros/messages/m1');
+    expect(path.toString()).to.equal('rooms/Eros/messages/m1');
+    expect(path.toStringWithLeadingSlash()).to.equal('/rooms/Eros/messages/m1');
+  });
+
   it('escapes FieldPath with segments', () => {
     const path = new FieldPath(['\\foo\\.`bar`']);
     expect(path.canonicalString()).to.equal('`\\\\foo\\\\.\\`bar\\``');
