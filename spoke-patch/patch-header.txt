@@ -1,8 +1,9 @@
 # Makes @firebase/firestore {{FIRESTORE_VERSION}} (firebase {{FIREBASE_VERSION}}) do work per server update in
 # proportion to what changed, not to everything the client holds live, keep one
 # copy of a document's fields where it kept one per cache entry and per view,
-# build each reference's path string once instead of on every read, and keep
-# the split array when parsing a lone path string instead of copying it twice.
+# build each reference's path string once instead of on every read, keep
+# the split array when parsing a lone path string instead of copying it twice,
+# and classify each value by its key when converting or sizing documents.
 #
 # Why: on every server update (remote event), local write, ack or bundle load, the
 # client revisits every listener's view and some per-listener state. A page holding
@@ -101,10 +102,31 @@
 #    and an unpatched SDK reading it back throws. Firestore allows at most
 #    100 levels of subcollections, so the backend rejects such a path.
 #
-# Behavior: changes 1-6 and 8-10 return the same results, emit the same limbo changes in
+# 11. typeOrder, AbstractUserDataWriter.convertObjectMap, estimateMapByteSize
+#    (DocumentSnapshot.data() and get(), the memory LRU cache's document size)
+#    typeOrder classified a value by testing `'nullValue' in value`, then
+#    `'booleanValue' in value` and so on, up to ten checks before mapValue.
+#    Values of different kinds have different object shapes, so these lookups
+#    run at V8's slowest (megamorphic) speed. typeOrder now reads the value's
+#    keys with for...in and looks each one up in a single switch that names
+#    every document-value member of the value_type oneof with its precedence
+#    and type order. A well-formed value has one key, so this is one lookup. A
+#    value with several members is classified by the one with the lowest
+#    precedence, which is the order upstream tested them in, and a value with
+#    none fails as before. A mapValue is still checked for a server timestamp,
+#    the max value and a vector. Members must be enumerable keys, as in JSON,
+#    protobufjs output and object literals: a non-enumerable property, or a
+#    Proxy hiding a key, is not seen. A primitive throws upstream's TypeError,
+#    after for...in has walked it (a long malformed string's characters
+#    included). The two per-field map walks behind data() and the size
+#    estimate loop over the fields directly instead of calling a helper's
+#    callback per field, and still skip inherited fields.
+#
+# Behavior: changes 1-6 and 8-11 return the same results, emit the same limbo changes in
 # the same order and throw the same errors as upstream, except change 10 for a
-# lone component with no empty segment past the engine's argument limit.
-# Checked on the branch:
+# lone component with no empty segment past the engine's argument limit, and
+# the hidden or non-enumerable members change 11 names, which no SDK path
+# builds. Checked on the branch:
 # - Firestore's unit and spec suites, in memory and with mock IndexedDB
 #   persistence including multi-tab specs, give the same results as the release
 #   tag: any test that fails also fails there.
@@ -130,6 +152,14 @@
 #   fixed and random path strings (200 seeds of 50 inputs: empty, leading,
 #   trailing and doubled slashes, several components, unicode), thrown errors
 #   included, and checks that a lone component keeps the split array.
+# - type_order.test.ts compares typeOrder with a copy of the release's
+#   typeOrder on a value of every kind (server timestamps, min and max values,
+#   vectors), on malformed values (no member, unknown, undefined, inherited,
+#   pipeline-only and several members) and on 2,000 random sets of members in
+#   random order, errors included. It compares data() under each server
+#   timestamp behavior, and the size estimate, with copies of the release's
+#   conversion and sizing on the same values, a document of every kind and 300
+#   random documents.
 #
 # Measured with the same changes (emulator: a second client holding documents
 # live, CPU per update):
@@ -160,6 +190,15 @@
 #   query(collectionGroup(db, 'messages'), where(documentId(), 'in', refs)) with
 #   30 references takes 16.7-20.0 us (median 17.2), and 10.9-13.2 us (median
 #   11.2) with the split array kept.
+# - Change 11, Node 24.18, built node bundle: 2,000 documents of 30 nested
+#   maps each loaded from a bundle, identical data() output, medians of 12
+#   alternating runs: data() 36.2 -> 16.6 us per document, the LRU cache's
+#   size estimate 27.7 -> 8.2 us. With the typeOrder change alone, 21.2 and
+#   13.1 us. Comparing many values of one shape costs a little more, because
+#   for...in has a setup cost that upstream's `in` checks, specialized to that
+#   one shape, did not: a cached query over 12,000 documents took 3-5% longer
+#   ordered by an integer field and 0-4% longer by a string field (two runs,
+#   medians of 6).
 #
 # Files: the main build's bundles that change (the common-* chunks and
 # intermediate/), and the type rollups that change

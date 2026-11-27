@@ -71,38 +71,124 @@ export const FALSE_VALUE: Value = {
   booleanValue: false
 };
 
-/** Extracts the backend's type order for the provided value. */
+/**
+ * Extracts the backend's type order for the provided value.
+ *
+ * Each document-value member of the proto `Value`'s `value_type` oneof stands
+ * for one type order; `mapValue` stands for an object unless its fields mark
+ * one of the special maps (see `mapTypeOrder`). A well-formed value has exactly
+ * one member. A value with several is classified by the one with the lowest
+ * precedence below, and a value with none, or with only members that
+ * pipelines use, fails.
+ *
+ * Members are found with `for...in`, so they must be enumerable keys, as they
+ * are in JSON, protobufjs output and object literals. A non-enumerable
+ * property, or a Proxy that hides a key, is not seen. A primitive throws a
+ * TypeError.
+ *
+ * Spoke patch (type-order): no upstream issue yet; draft in spoke-patch/upstream/issues/type-order.md.
+ */
 export function typeOrder(value: Value): TypeOrder {
-  if ('nullValue' in value) {
-    return TypeOrder.NullValue;
-  } else if ('booleanValue' in value) {
-    return TypeOrder.BooleanValue;
-  } else if ('integerValue' in value || 'doubleValue' in value) {
-    return TypeOrder.NumberValue;
-  } else if ('timestampValue' in value) {
-    return TypeOrder.TimestampValue;
-  } else if ('stringValue' in value) {
-    return TypeOrder.StringValue;
-  } else if ('bytesValue' in value) {
-    return TypeOrder.BlobValue;
-  } else if ('referenceValue' in value) {
-    return TypeOrder.RefValue;
-  } else if ('geoPointValue' in value) {
-    return TypeOrder.GeoPointValue;
-  } else if ('arrayValue' in value) {
-    return TypeOrder.ArrayValue;
-  } else if ('mapValue' in value) {
-    if (isServerTimestamp(value)) {
-      return TypeOrder.ServerTimestampValue;
-    } else if (isMaxValue(value)) {
-      return TypeOrder.MaxValue;
-    } else if (isVectorValue(value)) {
-      return TypeOrder.VectorValue;
+  // Reads the value's keys instead of testing `member in value` for each
+  // member: values of different kinds have different shapes, and those lookups
+  // run at V8's generic (megamorphic) speed on every value of every document.
+  // `for...in` lists inherited enumerable keys too, as `in` sees them.
+  //
+  // Precedence decides only a malformed value with several members; the lowest
+  // wins, whatever the key order. It is the order in which upstream's typeOrder
+  // tests the members, so such a value keeps upstream's result. It is neither
+  // the proto field number nor the sort order in TypeOrder. integerValue and
+  // doubleValue share one precedence: both mean a number, and upstream tests
+  // them together.
+  let decidingPrecedence = Infinity;
+  let decidingOrder: TypeOrder = TypeOrder.ObjectValue;
+  // eslint-disable-next-line guard-for-in
+  for (const key in value) {
+    let precedence: number;
+    let memberOrder: TypeOrder;
+    switch (key) {
+      case 'nullValue':
+        precedence = 0;
+        memberOrder = TypeOrder.NullValue;
+        break;
+      case 'booleanValue':
+        precedence = 1;
+        memberOrder = TypeOrder.BooleanValue;
+        break;
+      case 'integerValue':
+      case 'doubleValue':
+        precedence = 2;
+        memberOrder = TypeOrder.NumberValue;
+        break;
+      case 'timestampValue':
+        precedence = 3;
+        memberOrder = TypeOrder.TimestampValue;
+        break;
+      case 'stringValue':
+        precedence = 4;
+        memberOrder = TypeOrder.StringValue;
+        break;
+      case 'bytesValue':
+        precedence = 5;
+        memberOrder = TypeOrder.BlobValue;
+        break;
+      case 'referenceValue':
+        precedence = 6;
+        memberOrder = TypeOrder.RefValue;
+        break;
+      case 'geoPointValue':
+        precedence = 7;
+        memberOrder = TypeOrder.GeoPointValue;
+        break;
+      case 'arrayValue':
+        precedence = 8;
+        memberOrder = TypeOrder.ArrayValue;
+        break;
+      case 'mapValue':
+        precedence = 9;
+        memberOrder = TypeOrder.ObjectValue;
+        break;
+      default:
+        continue;
     }
-    return TypeOrder.ObjectValue;
-  } else {
+    if (precedence < decidingPrecedence) {
+      decidingPrecedence = precedence;
+      decidingOrder = memberOrder;
+    }
+  }
+  if (decidingPrecedence === Infinity) {
+    if (
+      value === null ||
+      (typeof value !== 'object' && typeof value !== 'function')
+    ) {
+      // A primitive has no members, and `in` throws a TypeError on it. Test
+      // it with `in` so that error surfaces and the assertion below never logs
+      // the value. The test never passes; its result is used so minifiers keep
+      // it.
+      if ('nullValue' in value) {
+        return TypeOrder.NullValue;
+      }
+    }
     return fail(0x6e87, 'Invalid value type', { value });
   }
+  return decidingOrder === TypeOrder.ObjectValue
+    ? mapTypeOrder(value)
+    : decidingOrder;
+}
+
+/**
+ * Returns the type order of a value whose deciding member is `mapValue`: a
+ * server timestamp, the max value, a vector, or otherwise an object.
+ */
+function mapTypeOrder(value: Value): TypeOrder {
+  if (isServerTimestamp(value)) {
+    return TypeOrder.ServerTimestampValue;
+  } else if (isMaxValue(value)) {
+    return TypeOrder.MaxValue;
+  } else if (isVectorValue(value)) {
+    return TypeOrder.VectorValue;
+  }
+  return TypeOrder.ObjectValue;
 }
 
 export interface EqualOptions {
@@ -581,10 +667,16 @@ export function estimateByteSize(value: Value): number {
 }
 
 function estimateMapByteSize(mapValue: MapValue): number {
+  // Spoke patch (type-order): no upstream issue yet; draft in spoke-patch/upstream/issues/type-order.md.
+  // Keep this a plain loop: it runs for every field of every map the cache
+  // sizes, and the shared forEach helper adds a callback per field.
+  const fields = mapValue.fields;
   let size = 0;
-  forEach(mapValue.fields, (key, val) => {
-    size += key.length + estimateByteSize(val);
-  });
+  for (const key in fields) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      size += key.length + estimateByteSize(fields[key]);
+    }
+  }
   return size;
 }
 
