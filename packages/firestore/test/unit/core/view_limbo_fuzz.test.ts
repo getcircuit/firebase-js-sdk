@@ -42,6 +42,7 @@ import {
 } from '../../../src/model/collections';
 import { MutableDocument } from '../../../src/model/document';
 import { DocumentSet } from '../../../src/model/document_set';
+import { addEqualityMatcher } from '../../util/equality_matcher';
 import {
   deletedDoc,
   doc,
@@ -99,6 +100,19 @@ function diff(
 }
 
 describe('View limbo tracking (randomized)', () => {
+  // Chai's deep.equal compares objects field by field. A path stores its
+  // string the first time canonicalString() runs, so two keys for the same
+  // document stop being field-by-field equal once one of them is read:
+  //
+  //   const a = key('rooms/eros/msgs/1');
+  //   const b = key('rooms/eros/msgs/1');
+  //   a.path.canonicalString(); // a's path now holds 'rooms/eros/msgs/1'
+  //   expect(a).to.deep.equal(b); // fails without the line below
+  //
+  // addEqualityMatcher() makes deep.equal call isEqual() on objects that have
+  // it, so keys compare by path, as the SDK compares them.
+  addEqualityMatcher();
+
   const paths = [
     ...Array.from({ length: 10 }, (_, i) => `rooms/eros/msgs/${i}`),
     'rooms/eros/msgs/__id5__',
