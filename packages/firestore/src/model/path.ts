@@ -314,8 +314,16 @@ export class ResourcePath extends BasePath<ResourcePath> {
           `Invalid segment (${path}). Paths must not contain // in them.`
         );
       }
+      const pathSegments = path.split('/');
+      // Spoke patch (from-string-split): see spoke-patch/upstream/issues/from-string-split.md.
+      // A lone component with no empty segment needs no stripping, so the
+      // path keeps the split array instead of a copy. Paths never write to
+      // their segments.
+      if (pathComponents.length === 1 && pathSegments.indexOf('') < 0) {
+        return new ResourcePath(pathSegments);
+      }
       // Strip leading and trailing slashed.
-      segments.push(...path.split('/').filter(segment => segment.length > 0));
+      segments.push(...pathSegments.filter(segment => segment.length > 0));
     }
 
     return new ResourcePath(segments);

@@ -1,6 +1,6 @@
 # Firestore performance patch
 
-The `spoke` branch of this fork carries changes to `@firebase/firestore` that Spoke applies to the published package as a Yarn patch. With them, each server update costs work in proportion to what changed, instead of to every listener and document the client holds, and reading a reference's `.path` again returns the string built on the first read. `patch-header.txt` describes each change, how it was checked and what it measured.
+The `spoke` branch of this fork carries changes to `@firebase/firestore` that Spoke applies to the published package as a Yarn patch. With them, each server update costs work in proportion to what changed, instead of to every listener and document the client holds, reading a reference's `.path` again returns the string built on the first read, and parsing a lone path string or resource name keeps the array `split` returned instead of copying it twice. `patch-header.txt` describes each change, how it was checked and what it measured.
 
 ## How it fits together
 
@@ -31,6 +31,7 @@ Every patch starts with a banner naming the branch, commit and base release it w
 | `key_in_filter_fuzz` | The indexed `documentId() in` / `not-in` filters match a plain `isEqual` scan, errors included |
 | `doc_overloads` | `doc(collectionReference, undefined)` does not compile |
 | `path.test.ts` (path strings) | After a path's string is read, its child, `popLast()` and `popFirst()` still give their own strings, though they share its segment array |
+| `path_from_string` | `ResourcePath.fromString` gives upstream's segments and errors for fixed and random path strings, and a lone component with no empty segment keeps the array `split` returned |
 | `build-patch.sh` base build | The release built here is byte-identical to the published package, so the patch holds only our changes |
 
 One limit: the edge cases cover the odd states we know of. A new one in a later change shows up only if the limbo fuzz or a written case reaches it, so a change to `View` adds its own cases.
