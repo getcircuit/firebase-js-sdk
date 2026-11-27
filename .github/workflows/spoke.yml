@@ -1,8 +1,8 @@
 # Checks Spoke's Firestore changes and builds the Yarn patch from them.
 #
-# Runs on every pull request into `spoke` and every push to it. A consuming
-# repository's pull request that updates the patch links the run for the
-# `spoke` commit its patch banner names; see spoke-patch/README.md.
+# Runs on every pull request into `spoke` and every push to it. Every push to
+# `spoke` is a release: it tags the commit and attaches the patch to a GitHub
+# Release; see spoke-patch/README.md.
 name: Spoke patch
 
 on:
@@ -21,6 +21,8 @@ jobs:
     name: Test and build the patch
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
@@ -86,3 +88,21 @@ jobs:
           name: firestore-patch
           path: ${{ runner.temp }}/firestore.patch
           retention-days: 90
+      - name: Release the patch
+        # Tags the commit spoke-firestore-<version>, adding -2, -3 for later
+        # releases of the same Firestore version. A rerun of an already released
+        # commit does nothing.
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$(git tag --points-at HEAD 'spoke-firestore-*')" ]; then exit 0; fi
+          version=$(node -p "require('./packages/firestore/package.json').version")
+          tag="spoke-firestore-$version"
+          n=1
+          while git rev-parse -q --verify "refs/tags/$tag" > /dev/null; do
+            n=$((n + 1))
+            tag="spoke-firestore-$version-$n"
+          done
+          gh release create "$tag" "$RUNNER_TEMP/firestore.patch" --target "$GITHUB_SHA" \
+            --title "$tag" --notes "Yarn patch for @firebase/firestore $version, built from $GITHUB_SHA."

@@ -39,7 +39,7 @@ One limit: the edge cases cover the odd states we know of. A new one in a later 
 
 - `main` mirrors upstream `main`. Update it with GitHub's "Sync fork" and never commit to it.
 - `spoke` is the default branch: upstream's latest release we use, plus our changes. `git diff firebase@<version> spoke` shows exactly what we change.
-- `spoke-firestore-<version>` tags mark the commit each shipped patch was built from, eg. `spoke-firestore-4.16.0`. A later patch for the same Firestore version adds a counter: `spoke-firestore-4.17.2-2`, then `-3`. Tags never move, so each shipped patch keeps its own. The patch banner names the commit.
+- Every push to `spoke` is a release. CI tags the commit `spoke-firestore-<version>` (`-2`, `-3` for later releases of the same version) and attaches the patch to a GitHub Release under that tag.
 
 Upstream `main` is ahead of any release, so `spoke` only ever takes in release tags (`firebase@12.16.0`), never `main`. The patch has to apply to the package npm published, and `build-patch.sh` stops when the base build does not match it.
 
@@ -91,16 +91,15 @@ The `doc()` type fix (change 7) came from such a patch, written for 4.5.0.
 
 ```mermaid
 flowchart LR
-  A["branch from spoke<br/>one commit per change"] --> B["PR into spoke<br/>CI: types, tests, patch build"]
-  B -->|"fast-forward spoke"| C["push to spoke<br/>CI builds the patch artifact"]
-  C --> D["consumer PR<br/>links the fork PR and the run"]
+  A["branch from spoke"] --> B["PR into spoke<br/>CI: types, tests, patch build"]
+  B -->|merge| C["GitHub Release<br/>tag + firestore.patch"]
+  C --> D["consumer PR<br/>uses the release's patch"]
 ```
 
 1. Cut a branch from `spoke` and make the change: one commit per change, each with its test, its `Spoke patch (...)` markers, and an update to every list of changes (the summary and numbered list in `patch-header.txt`, this README's intro and checks table, the table in `upstream/README.md` and the issue draft). Link the change by its fork pull request, not by commit: open the pull request, then add its link.
-2. Open a pull request into `spoke` in this fork. `.github/workflows/spoke.yml` type-checks, runs the unit and spec tests in memory and with persistence, and builds the patch (uploaded as the `firestore-patch` artifact). It must pass before merging.
-3. Merge by fast-forwarding `spoke` to the branch: rebase the branch onto `spoke` if it is behind, then `git push <fork remote> <branch>:spoke`. `spoke` stays one commit per change, and GitHub marks the pull request merged. The fork does not allow rebase merges in the web interface. The push to `spoke` runs the workflow again and builds the patch from the `spoke` commit.
-4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit. Add that repository's release entry too: in web-apps, a changeset (`yarn changeset`). A local `build-patch.sh` build of the same commit gives the same file, on macOS or Linux, so use one to check the artifact.
-5. Once that pull request merges, tag the commit as in step 6 below.
+2. Open a pull request into `spoke`. CI type-checks, runs the unit and spec tests in memory and with persistence, and builds the patch. It must pass before merging.
+3. Merge it, squashed to one commit. CI runs again on `spoke` and publishes the release.
+4. In the consuming repository, replace the patch with the release's `firestore.patch`, add that repository's release entry (in web-apps, a changeset), and link the release in the pull request.
 
 Upgrades follow the same path: the merge of the new release tag goes into `spoke` through a pull request too.
 
@@ -110,7 +109,6 @@ Upgrades follow the same path: the merge of the new release tag goes into `spoke
 2. On a branch cut from `spoke`, merge the new release tag (`git merge firebase@<new>`) and open a pull request into `spoke`. Resolve conflicts in the merge commit, and drop any change upstream now ships, with a revert or in the merge itself.
 3. Run the tests above. If a recorded result in `view_review_cases.test.ts` no longer holds, check what the new release's View does before updating it. Update `patch-header.txt` if a change or its evidence changed.
 4. Check each `Spoke patch (...)` marker against the upstream issue it names, and drop changes upstream now ships.
-5. Build the patch with the new tag, passing the consumer's existing patches for the new version if it has any, and replace it in the consuming repository.
-6. Once the consuming pull request merges, tag the commit its patch was built from, `spoke-firestore-<new firestore version>` (or the next counter, as under "Branches and tags"), and push the tag.
+5. Merge it, then replace the patch in the consuming repository with the release's `firestore.patch` as in step 4 above. If the consumer had other patches for the new version, check them first with `build-patch.sh` (see "Existing patches").
 
 To propose a change upstream, cut a branch from the release tag and cherry-pick or rewrite that change on it.
