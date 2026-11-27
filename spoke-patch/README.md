@@ -96,10 +96,10 @@ flowchart LR
   C --> D["consumer PR<br/>links the fork PR and the run"]
 ```
 
-1. Cut a branch from `spoke` and make the change: one commit per change, each with its test, its `Spoke patch (...)` markers, and updates to `patch-header.txt` and `upstream/`.
+1. Cut a branch from `spoke` and make the change: one commit per change, each with its test, its `Spoke patch (...)` markers, and an update to every list of changes (the summary and numbered list in `patch-header.txt`, this README's intro and checks table, the table in `upstream/README.md` and the issue draft). Link the change by its fork pull request, not by commit: open the pull request, then add its link.
 2. Open a pull request into `spoke` in this fork. `.github/workflows/spoke.yml` type-checks, runs the unit and spec tests in memory and with persistence, and builds the patch (uploaded as the `firestore-patch` artifact). It must pass before merging.
 3. Merge by fast-forwarding `spoke` to the branch: rebase the branch onto `spoke` if it is behind, then `git push <fork remote> <branch>:spoke`. `spoke` stays one commit per change, and GitHub marks the pull request merged. The fork does not allow rebase merges in the web interface. The push to `spoke` runs the workflow again and builds the patch from the `spoke` commit.
-4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit. A local `build-patch.sh` build of the same commit gives the same file, on macOS or Linux, so use one to check the artifact.
+4. In the consuming repository, open a pull request that replaces the patch with that run's `firestore-patch` artifact. Its description links the fork pull request and the green `spoke` run, and the patch banner names the same commit. Add that repository's release entry too: in web-apps, a changeset (`yarn changeset`). A local `build-patch.sh` build of the same commit gives the same file, on macOS or Linux, so use one to check the artifact.
 5. Once that pull request merges, tag the commit as in step 6 below.
 
 Upgrades follow the same path: the merge of the new release tag goes into `spoke` through a pull request too.
